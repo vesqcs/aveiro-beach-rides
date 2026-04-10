@@ -14,7 +14,110 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      bookings: {
+        Row: {
+          created_at: string
+          id: string
+          passenger_id: string
+          ride_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          passenger_id: string
+          ride_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          passenger_id?: string
+          ride_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_ride_id_fkey"
+            columns: ["ride_id"]
+            isOneToOne: false
+            referencedRelation: "rides"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          full_name: string
+          id: string
+          is_driver: boolean
+          phone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_driver?: boolean
+          phone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          full_name?: string
+          id?: string
+          is_driver?: boolean
+          phone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rides: {
+        Row: {
+          cost_share: number
+          created_at: string
+          destination: string
+          driver_id: string
+          id: string
+          origin: string
+          ride_date: string
+          ride_time: string
+          seats_available: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          cost_share: number
+          created_at?: string
+          destination: string
+          driver_id: string
+          id?: string
+          origin: string
+          ride_date: string
+          ride_time: string
+          seats_available: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          cost_share?: number
+          created_at?: string
+          destination?: string
+          driver_id?: string
+          id?: string
+          origin?: string
+          ride_date?: string
+          ride_time?: string
+          seats_available?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
