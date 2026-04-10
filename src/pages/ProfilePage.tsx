@@ -10,7 +10,7 @@ import RideCard from '@/components/RideCard';
 import { User, Car, Armchair, LogOut } from 'lucide-react';
 import { toast } from 'sonner';
 
-type RideWithProfile = Tables<'rides'> & { profiles: Tables<'profiles'> | null };
+type RideWithProfile = Tables<'rides'> & { profiles?: Tables<'profiles'> | null };
 
 export default function ProfilePage() {
   const { user, signOut } = useAuth();
@@ -19,11 +19,9 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState('');
   const [isDriver, setIsDriver] = useState(false);
   const [saving, setSaving] = useState(false);
-
-  // Dashboard data
   const [myRides, setMyRides] = useState<RideWithProfile[]>([]);
-  const [myBookings, setMyBookings] = useState<(Tables<'bookings'> & { rides: RideWithProfile | null })[]>([]);
-  const [rideBookings, setRideBookings] = useState<Record<string, (Tables<'bookings'> & { profiles: Tables<'profiles'> | null })[]>>({});
+  const [myBookings, setMyBookings] = useState<any[]>([]);
+  const [rideBookings, setRideBookings] = useState<Record<string, any[]>>({});
 
   useEffect(() => {
     if (user) {
@@ -46,27 +44,34 @@ export default function ProfilePage() {
   const fetchDashboard = async () => {
     if (!user) return;
 
-    // My posted rides (driver)
+    // My posted rides
     const { data: rides } = await supabase
       .from('rides')
-      .select('*, profiles!inner(*)') as any
+      .select('*')
       .eq('driver_id', user.id)
       .order('ride_date', { ascending: true });
-    setMyRides((rides as RideWithProfile[]) || []);
+
+    const myRidesData = rides || [];
+    setMyRides(myRidesData);
 
     // Bookings on my rides
-    if (rides && rides.length > 0) {
-      const rideIds = rides.map((r) => r.id);
+    if (myRidesData.length > 0) {
+      const rideIds = myRidesData.map((r) => r.id);
       const { data: rb } = await supabase
         .from('bookings')
-        .select('*, profiles!inner(*)') as any
+        .select('*')
         .in('ride_id', rideIds)
         .eq('status', 'confirmed');
-      if (rb) {
+      if (rb && rb.length > 0) {
+        const passengerIds = [...new Set(rb.map((b) => b.passenger_id))];
+        const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', passengerIds);
+        const profilesMap: Record<string, Tables<'profiles'>> = {};
+        if (profiles) profiles.forEach((p) => (profilesMap[p.user_id] = p));
+
         const map: Record<string, any[]> = {};
-        rb.forEach((b: any) => {
+        rb.forEach((b) => {
           if (!map[b.ride_id]) map[b.ride_id] = [];
-          map[b.ride_id].push(b);
+          map[b.ride_id].push({ ...b, profiles: profilesMap[b.passenger_id] || null });
         });
         setRideBookings(map);
       }
@@ -75,10 +80,18 @@ export default function ProfilePage() {
     // My booked rides (passenger)
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('*, rides(*, profiles!inner(*))') as any
+      .select('*')
       .eq('passenger_id', user.id)
       .eq('status', 'confirmed');
-    setMyBookings((bookings as any[]) || []);
+
+    if (bookings && bookings.length > 0) {
+      const rideIds = bookings.map((b) => b.ride_id);
+      const { data: bookedRides } = await supabase.from('rides').select('*').in('id', rideIds);
+      const ridesMap: Record<string, Tables<'rides'>> = {};
+      if (bookedRides) bookedRides.forEach((r) => (ridesMap[r.id] = r));
+
+      setMyBookings(bookings.map((b) => ({ ...b, rides: ridesMap[b.ride_id] || null })));
+    }
   };
 
   const handleSave = async () => {
@@ -108,7 +121,6 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      {/* Profile form */}
       <div className="glass-card rounded-xl p-4 space-y-4">
         <div className="space-y-2">
           <Label>Full Name</Label>
@@ -130,7 +142,6 @@ export default function ProfilePage() {
         </Button>
       </div>
 
-      {/* Driver dashboard */}
       {isDriver && myRides.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-bold flex items-center gap-2">
@@ -154,7 +165,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* Passenger dashboard */}
       {myBookings.length > 0 && (
         <div className="space-y-3">
           <h2 className="text-lg font-bold flex items-center gap-2">

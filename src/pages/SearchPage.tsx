@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 
 const DESTINATIONS = ['All', 'Praia da Barra', 'Costa Nova', 'Porto', 'Coimbra', 'Lisboa'];
 
-type RideWithProfile = Tables<'rides'> & { profiles: Tables<'profiles'> | null };
+type RideWithProfile = Tables<'rides'> & { profiles?: Tables<'profiles'> | null };
 
 export default function SearchPage() {
   const { user } = useAuth();
@@ -27,7 +27,7 @@ export default function SearchPage() {
     setLoading(true);
     let query = supabase
       .from('rides')
-      .select('*, profiles!inner(*)') as any
+      .select('*')
       .eq('status', 'active')
       .gte('ride_date', new Date().toISOString().split('T')[0])
       .order('ride_date', { ascending: true });
@@ -42,9 +42,21 @@ export default function SearchPage() {
     const { data, error } = await query;
     if (error) {
       toast.error('Failed to load rides');
-    } else {
-      setRides((data as RideWithProfile[]) || []);
+      setLoading(false);
+      return;
     }
+
+    // Fetch driver profiles
+    const driverIds = [...new Set((data || []).map((r) => r.driver_id))];
+    let profilesMap: Record<string, Tables<'profiles'>> = {};
+    if (driverIds.length > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('*').in('user_id', driverIds);
+      if (profiles) {
+        profiles.forEach((p) => (profilesMap[p.user_id] = p));
+      }
+    }
+
+    setRides((data || []).map((r) => ({ ...r, profiles: profilesMap[r.driver_id] || null })));
     setLoading(false);
   };
 
@@ -95,7 +107,6 @@ export default function SearchPage() {
         Find a Ride
       </h1>
 
-      {/* Filters */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="space-y-1.5">
           <Label className="text-xs">Destination</Label>
@@ -121,7 +132,6 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {/* Results */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
