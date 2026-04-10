@@ -49,7 +49,7 @@ export default function ProfilePage() {
     // My posted rides (driver)
     const { data: rides } = await supabase
       .from('rides')
-      .select('*, profiles!rides_driver_id_fkey(*)')
+      .select('*, profiles!inner(*)') as any
       .eq('driver_id', user.id)
       .order('ride_date', { ascending: true });
     setMyRides((rides as RideWithProfile[]) || []);
@@ -59,7 +59,7 @@ export default function ProfilePage() {
       const rideIds = rides.map((r) => r.id);
       const { data: rb } = await supabase
         .from('bookings')
-        .select('*, profiles!bookings_passenger_id_fkey(*)')
+        .select('*, profiles!inner(*)') as any
         .in('ride_id', rideIds)
         .eq('status', 'confirmed');
       if (rb) {
@@ -75,7 +75,7 @@ export default function ProfilePage() {
     // My booked rides (passenger)
     const { data: bookings } = await supabase
       .from('bookings')
-      .select('*, rides(*, profiles!rides_driver_id_fkey(*))')
+      .select('*, rides(*, profiles!inner(*))') as any
       .eq('passenger_id', user.id)
       .eq('status', 'confirmed');
     setMyBookings((bookings as any[]) || []);

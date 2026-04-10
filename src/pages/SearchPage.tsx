@@ -27,7 +27,7 @@ export default function SearchPage() {
     setLoading(true);
     let query = supabase
       .from('rides')
-      .select('*, profiles!rides_driver_id_fkey(*)')
+      .select('*, profiles!inner(*)') as any
       .eq('status', 'active')
       .gte('ride_date', new Date().toISOString().split('T')[0])
       .order('ride_date', { ascending: true });
