@@ -46,8 +46,17 @@ function AppRoutes() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      <Toaster />
-      <Sonner />
+      {/* Toaster padrão do sistema */}
+      <Toaster /> 
+
+      {/* Configuração corrigida do Sonner para as notificações de sucesso/erro */}
+      <Sonner 
+        position="top-center" 
+        closeButton 
+        richColors 
+        visibleToasts={3}
+      />
+
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
