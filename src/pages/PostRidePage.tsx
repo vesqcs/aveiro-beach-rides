@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PlusCircle, Car, AlertCircle, Navigation2 } from 'lucide-react';
 import { toast } from 'sonner';
-// Importamos o novo componente de Autocomplete
 import LocationInput from '@/components/LocationInput';
 
 export default function PostRidePage() {
@@ -67,15 +66,14 @@ export default function PostRidePage() {
 
     setLoading(true);
     
-    // CORREÇÃO: Mapeamento exato para as colunas da base de dados
     const { error } = await supabase.from('rides').insert({
       driver_id: user.id,
       origin: origin.trim(),
       destination: destination.trim(),
       ride_date: rideDate,
       ride_time: rideTime,
-      seats_available: parseInt(seats), // Corrigido de 'seats'
-      price: cost,                     // Corrigido de 'cost_share'
+      seats_available: parseInt(seats),
+      price: cost,
       status: 'active'
     });
 
@@ -96,21 +94,26 @@ export default function PostRidePage() {
     );
   }
 
+  // NOVA MENSAGEM: Mais amigável e direta para quem não tem carro registado
   if (isDriver === false) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-4">
-        <div className="bg-amber-100 p-4 rounded-full">
-          <Car className="w-12 h-12 text-amber-600" />
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-6 animate-fade-up">
+        <div className="bg-primary/10 p-6 rounded-full">
+          <Car className="w-12 h-12 text-primary" />
         </div>
-        <h2 className="text-xl font-bold text-slate-900">Modo Condutor Inativo</h2>
-        <p className="text-slate-500 max-w-xs text-sm">
-          Precisas de ativar o modo condutor e registar o teu veículo no perfil para poderes publicar viagens.
-        </p>
+        <div className="space-y-2">
+          <h2 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter">
+            Falta o teu carro!
+          </h2>
+          <p className="text-slate-500 max-w-[260px] text-sm font-medium leading-relaxed">
+            Para poderes publicar boleias e dividir custos, precisas de registar o teu carro no perfil.
+          </p>
+        </div>
         <Button 
-          onClick={() => navigate('/profile', { state: { activeTab: 'driver' } })} 
-          className="font-bold"
+          onClick={() => navigate('/profile')} 
+          className="font-black uppercase tracking-widest px-8 h-12 rounded-xl shadow-lg shadow-primary/20 transition-all active:scale-95"
         >
-          Ir para o Perfil
+          Ir registar carro
         </Button>
       </div>
     );
@@ -118,27 +121,25 @@ export default function PostRidePage() {
 
   return (
     <div className="min-h-screen pb-20 pt-4 px-4 max-w-lg mx-auto text-slate-800">
-      <h1 className="text-2xl font-bold mb-6 flex items-center gap-2 text-slate-900">
+      <h1 className="text-2xl font-black mb-6 flex items-center gap-2 text-slate-900 italic uppercase tracking-tighter">
         <PlusCircle className="w-6 h-6 text-primary" />
         Publicar Viagem
       </h1>
 
       <form onSubmit={handleSubmit} className="space-y-4 animate-fade-up">
-        {/* ORIGEM COM AUTOCOMPLETE */}
         <div className="space-y-2">
-          <Label>Origem</Label>
+          <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Origem</Label>
           <LocationInput 
-            placeholder="Cidade de partida (ex: Lisboa, Madrid...)" 
+            placeholder="Cidade de partida..." 
             value={origin} 
             onChange={setOrigin} 
           />
         </div>
 
-        {/* DESTINO COM AUTOCOMPLETE */}
         <div className="space-y-2">
-          <Label>Destino</Label>
+          <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Destino</Label>
           <LocationInput 
-            placeholder="Para onde vais? (ex: Porto, Paris...)" 
+            placeholder="Para onde vais?" 
             value={destination} 
             onChange={setDestination}
             icon={<Navigation2 className="w-4 h-4 text-primary" />} 
@@ -147,10 +148,10 @@ export default function PostRidePage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Data</Label>
+            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Data</Label>
             <Input
               type="date"
-              className="bg-white h-11"
+              className="bg-white h-12 rounded-xl border-slate-100 font-bold"
               value={rideDate}
               onChange={(e) => setRideDate(e.target.value)}
               min={new Date().toISOString().split('T')[0]}
@@ -158,10 +159,10 @@ export default function PostRidePage() {
             />
           </div>
           <div className="space-y-2">
-            <Label>Hora</Label>
+            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Hora</Label>
             <Input
               type="time"
-              className="bg-white h-11"
+              className="bg-white h-12 rounded-xl border-slate-100 font-bold"
               value={rideTime}
               onChange={(e) => setRideTime(e.target.value)}
               required
@@ -171,9 +172,9 @@ export default function PostRidePage() {
 
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Lugares Disponíveis</Label>
+            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Vagas</Label>
             <Select value={seats} onValueChange={setSeats} required>
-              <SelectTrigger className="bg-white h-11">
+              <SelectTrigger className="bg-white h-12 rounded-xl border-slate-100 font-bold">
                 <SelectValue placeholder="Qtd." />
               </SelectTrigger>
               <SelectContent>
@@ -184,12 +185,12 @@ export default function PostRidePage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label>Contribuição (€)</Label>
+            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Preço (€)</Label>
             <Input
               type="number"
               step="0.50"
               min="0"
-              className="bg-white h-11"
+              className="bg-white h-12 rounded-xl border-slate-100 font-bold"
               value={costShare}
               onChange={(e) => setCostShare(e.target.value)}
               placeholder="Ex: 5.00"
@@ -198,16 +199,16 @@ export default function PostRidePage() {
           </div>
         </div>
 
-        <div className="flex gap-2 p-3 bg-primary/5 rounded-lg border border-primary/10">
-          <AlertCircle className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-          <p className="text-[10px] text-slate-600 leading-tight">
-            Este sistema destina-se à partilha de custos de combustível e portagens. Pede um valor justo.
+        <div className="flex gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
+          <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+          <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
+            Lembra-te: este sistema serve para dividir custos de combustível e portagens. Pede um valor justo para a comunidade.
           </p>
         </div>
 
         <Button 
           type="submit" 
-          className="w-full h-12 font-bold text-lg" 
+          className="w-full h-14 font-black uppercase tracking-widest shadow-xl shadow-primary/20 rounded-2xl text-lg italic transition-all active:scale-95" 
           disabled={loading || !origin || !destination}
         >
           {loading ? 'A publicar...' : 'Publicar Agora'}

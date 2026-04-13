@@ -25,7 +25,6 @@ export default function ProfilePage() {
   const fetchProfileData = async () => {
     if (!user) return;
     
-    // 1. Dados do Perfil e Rating
     const { data: prof } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
     if (prof) {
       setProfile(prof);
@@ -37,7 +36,6 @@ export default function ProfilePage() {
     const { data: rat } = await supabase.rpc('get_user_rating', { user_uuid: user.id });
     if (rat && rat[0]) setRating({ avg: rat[0].avg_rating, count: rat[0].total_count });
 
-    // 2. BUSCAR VIAGENS
     const { data: driverRides } = await supabase.from('rides').select('*').eq('driver_id', user.id);
     const { data: passengerBookings } = await supabase.from('bookings').select('rides(*)').eq('passenger_id', user.id).or('status.eq.accepted,status.eq.CONFIRMED');
 
@@ -48,7 +46,6 @@ export default function ProfilePage() {
       new Date(b.ride_date).getTime() - new Date(a.ride_date).getTime()
     );
 
-    // 3. Lógica de Notificações em Realtime
     const ridesWithNotifs = await Promise.all(allRides.map(async (ride) => {
       const lastVisit = localStorage.getItem(`last_visit_${ride.id}`) || new Date(0).toISOString();
       const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('ride_id', ride.id).gt('created_at', lastVisit).not('sender_id', 'eq', user.id);
@@ -66,19 +63,22 @@ export default function ProfilePage() {
   }, [user]);
 
   const handleUpdateProfile = async () => {
+    const isNowDriver = editCar.trim().length > 0;
+
     const { error } = await supabase
       .from('profiles')
       .update({
         full_name: editName,
         car_model: editCar,
-        avatar_url: editAvatar
+        avatar_url: editAvatar,
+        is_driver: isNowDriver 
       })
       .eq('user_id', user?.id);
 
     if (error) {
       toast.error("Erro ao atualizar perfil");
     } else {
-      toast.success("Perfil guardado!");
+      toast.success(isNowDriver ? "Perfil atualizado! Já podes publicar." : "Perfil guardado!");
       setIsEditing(false);
       fetchProfileData();
     }
@@ -98,7 +98,6 @@ export default function ProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      {/* Header Perfil */}
       <div className="bg-white border-b border-slate-100 p-8 pt-12 text-center space-y-4 shadow-sm">
         {isEditing ? (
           <div className="space-y-6 max-w-xs mx-auto animate-in fade-in zoom-in duration-200">
@@ -109,8 +108,14 @@ export default function ProfilePage() {
                 <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="font-bold h-12 rounded-xl bg-slate-50 border-none mt-1" />
               </div>
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">O meu Carro</label>
-                <Input value={editCar} onChange={(e) => setEditCar(e.target.value)} className="font-bold h-12 rounded-xl bg-slate-50 border-none mt-1" />
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-1">O meu Carro (Modelo)</label>
+                <Input 
+                  placeholder="Ex: Renault Clio Branco"
+                  value={editCar} 
+                  onChange={(e) => setEditCar(e.target.value)} 
+                  className="font-bold h-12 rounded-xl bg-slate-50 border-none mt-1" 
+                />
+                <p className="text-[9px] text-slate-400 mt-1 ml-1 font-medium">* Regista o teu carro para publicares boleias.</p>
               </div>
             </div>
             <div className="flex gap-2">
@@ -124,11 +129,21 @@ export default function ProfilePage() {
               <div className="w-24 h-24 bg-slate-100 rounded-full mx-auto flex items-center justify-center border-4 border-white shadow-xl overflow-hidden">
                 {profile?.avatar_url ? <img src={profile.avatar_url} className="w-full h-full object-cover" /> : <User className="w-10 h-10 text-slate-300" />}
               </div>
-              {rating.count > 5 && <div className="absolute -bottom-1 -right-1 bg-blue-500 text-white px-2 py-0.5 rounded-lg text-[9px] font-black shadow-lg">PRO</div>}
+              {profile?.is_driver && (
+                <div className="absolute -bottom-1 -right-1 bg-primary text-white p-1.5 rounded-lg shadow-lg">
+                  <Car className="w-3 h-3" />
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <h1 className="text-xl font-black text-slate-900 uppercase italic tracking-tighter">{profile?.full_name || 'Utilizador'}</h1>
-              {profile?.car_model && <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2 mt-1 italic"><Car className="w-3 h-3" /> {profile.car_model}</p>}
+              {profile?.car_model ? (
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest flex items-center justify-center gap-2 mt-1 italic">
+                   <Car className="w-3 h-3 text-primary" /> {profile.car_model}
+                </p>
+              ) : (
+                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 italic">Apenas Passageiro</p>
+              )}
               <div className="flex items-center justify-center gap-2 pt-2">
                 <div className="flex items-center text-yellow-500 bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100">
                   <Star className="w-3 h-3 fill-yellow-500" />
@@ -144,7 +159,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Listagem de Viagens */}
       <div className="px-4 mt-6 max-w-lg mx-auto space-y-6">
         <div className="space-y-3">
           <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 italic">O meu Histórico</h2>
