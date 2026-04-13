@@ -25,6 +25,9 @@ export default function SearchPage() {
   const fetchRides = async () => {
     setLoading(true);
     try {
+      // Definimos o momento atual para filtrar apenas viagens que ainda não passaram
+      const today = new Date().toISOString().split('T')[0];
+
       let query = supabase
         .from('rides')
         .select(`
@@ -39,8 +42,9 @@ export default function SearchPage() {
         `)
         .eq('status', 'active')
         .gt('seats_available', 0)
-        .gte('ride_date', new Date().toISOString().split('T')[0])
-        .order('ride_date', { ascending: true });
+        .gte('ride_date', today) // FILTRO CRUCIAL: Apenas viagens de hoje para a frente
+        .order('ride_date', { ascending: true })
+        .order('ride_time', { ascending: true });
 
       if (origin.trim()) {
         query = query.ilike('origin', `%${origin.trim()}%`);
@@ -58,6 +62,7 @@ export default function SearchPage() {
       if (error) throw error;
       setRides(data || []);
     } catch (error: any) {
+      console.error(error);
       toast.error('Erro ao carregar boleias');
     } finally {
       setLoading(false);
@@ -78,7 +83,6 @@ export default function SearchPage() {
     }
   };
 
-  // MUDANÇA AQUI: Removi origin e destination das dependências
   useEffect(() => {
     fetchRides();
     fetchBookings();
@@ -88,27 +92,26 @@ export default function SearchPage() {
     if (destination) params.destination = destination;
     if (dateFilter) params.date = dateFilter;
     setSearchParams(params);
-
-  }, [user, dateFilter]); // Só dispara automático se mudar o user ou a data
+  }, [user, dateFilter]); 
 
   const clearFilters = () => {
     setOrigin('');
     setDestination('');
     setDateFilter('');
-    setSearchParams({}); // Limpa a URL também
+    setSearchParams({});
     fetchRides();
   };
 
   return (
     <div className="min-h-screen pb-24 pt-4 px-4 max-w-lg mx-auto space-y-6 text-slate-800">
-      <h1 className="text-2xl font-bold flex items-center gap-2 text-slate-900">
-        <SearchIcon className="w-6 h-6 text-primary" /> Procurar Boleia
+      <h1 className="text-2xl font-black flex items-center gap-2 text-slate-900 tracking-tighter uppercase">
+        <SearchIcon className="w-6 h-6 text-primary" /> Procurar BOLEIA
       </h1>
 
-      <div className="p-4 bg-white rounded-2xl border shadow-sm space-y-4">
-        <div className="space-y-3">
+      <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 space-y-5">
+        <div className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-slate-400 ml-1">Origem</Label>
+            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-widest">Origem</Label>
             <LocationInput 
               placeholder="Sair de..." 
               value={origin} 
@@ -117,7 +120,7 @@ export default function SearchPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-bold text-slate-400 ml-1">Destino</Label>
+            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-widest">Destino</Label>
             <LocationInput 
               placeholder="Ir para..." 
               value={destination} 
@@ -131,42 +134,43 @@ export default function SearchPage() {
               <Calendar className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
               <Input 
                 type="date" 
-                className="pl-9 h-11 bg-slate-50 border-none"
+                className="pl-9 h-12 bg-slate-50 border-none rounded-xl font-medium"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
               />
             </div>
             {(origin || destination || dateFilter) && (
-              <Button variant="outline" size="icon" className="h-11 w-11 shrink-0" onClick={clearFilters}>
+              <Button variant="ghost" size="icon" className="h-12 w-12 shrink-0 bg-slate-100 rounded-xl" onClick={clearFilters}>
                 <X className="w-4 h-4" />
               </Button>
             )}
           </div>
         </div>
 
-        {/* Agora o botão é quem manda na pesquisa manual */}
-        <Button onClick={fetchRides} className="w-full h-11 font-bold shadow-md shadow-primary/10 transition-all active:scale-95">
-          Procurar Agora
+        <Button onClick={fetchRides} className="w-full h-12 font-black uppercase tracking-widest shadow-lg shadow-primary/20 rounded-xl transition-all active:scale-95">
+          Filtrar Resultados
         </Button>
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-32 rounded-xl bg-slate-100 animate-pulse" />)}
+        <div className="space-y-4">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-40 rounded-3xl bg-slate-100 animate-pulse" />
+          ))}
         </div>
       ) : rides.length === 0 ? (
-        <div className="text-center py-16 bg-slate-50 rounded-2xl border border-dashed border-slate-300">
-          <Filter className="w-10 h-10 mx-auto mb-3 opacity-20" />
-          <p className="font-bold text-slate-600">Nenhuma boleia encontrada</p>
-          <p className="text-sm text-slate-400 px-8 mt-1 text-balance">
-            Tenta selecionar uma cidade da lista de sugestões.
+        <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+          <Filter className="w-12 h-12 mx-auto mb-4 text-slate-200" />
+          <p className="font-bold text-slate-800">Sem boleias para hoje</p>
+          <p className="text-sm text-slate-400 px-10 mt-2">
+            Não encontrámos viagens ativas. Tenta mudar o destino ou a data.
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
-            {rides.length} {rides.length === 1 ? 'viagem disponível' : 'viagens disponíveis'}
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">
+            {rides.length} {rides.length === 1 ? 'Boleia encontrada' : 'Boleias encontradas'}
           </p>
           {rides.map((ride) => (
             <RideCard 

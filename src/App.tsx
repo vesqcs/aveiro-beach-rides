@@ -5,7 +5,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import BottomNav from "@/components/BottomNav";
-import DisclaimerFooter from "@/components/DisclaimerFooter";
 import HomePage from "@/pages/HomePage";
 import SearchPage from "@/pages/SearchPage";
 import PostRidePage from "@/pages/PostRidePage";
@@ -28,7 +27,7 @@ function AppRoutes() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex-1 pb-32">
+      <div className="flex-1 pb-24"> {/* Reduzi um pouco o padding já que o footer saiu */}
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={user && !loading ? <Navigate to="/profile" replace /> : <AuthPage />} />
@@ -39,7 +38,6 @@ function AppRoutes() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
-      <DisclaimerFooter />
       <BottomNav />
     </div>
   );
