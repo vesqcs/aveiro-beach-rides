@@ -12,6 +12,7 @@ import PostRidePage from "@/pages/PostRidePage";
 import ProfilePage from "@/pages/ProfilePage";
 import AuthPage from "@/pages/AuthPage";
 import NotFound from "@/pages/NotFound";
+import RideDetailsPage from '@/pages/RideDetailsPage';
 
 const queryClient = new QueryClient();
 
@@ -27,13 +28,14 @@ function AppRoutes() {
 
   return (
     <div className="flex flex-col min-h-screen">
-      <div className="flex-1">
+      <div className="flex-1 pb-32">
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={user && !loading ? <Navigate to="/profile" replace /> : <AuthPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/post" element={<ProtectedRoute><PostRidePage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
+          <Route path="/ride/:id" element={<RideDetailsPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
@@ -46,17 +48,8 @@ function AppRoutes() {
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
-      {/* Toaster padrão do sistema */}
       <Toaster /> 
-
-      {/* Configuração corrigida do Sonner para as notificações de sucesso/erro */}
-      <Sonner 
-        position="top-center" 
-        closeButton 
-        richColors 
-        visibleToasts={3}
-      />
-
+      <Sonner position="top-center" closeButton richColors visibleToasts={3} />
       <BrowserRouter>
         <AuthProvider>
           <AppRoutes />
