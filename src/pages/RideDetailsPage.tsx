@@ -58,6 +58,10 @@ export default function RideDetailsPage() {
   };
 
   useEffect(() => {
+    if (id) {
+      // MARCAR COMO LIDO: Guarda o momento da visita
+      localStorage.setItem(`last_visit_${id}`, new Date().toISOString());
+    }
     fetchDetails();
   }, [id, user]);
 
@@ -78,7 +82,7 @@ export default function RideDetailsPage() {
       toast.error("Erro ao pedir boleia");
     } else {
       toast.success("Pedido enviado! Aguarda a confirmação.");
-      fetchDetails(); // Atualiza a página para mostrar que está pendente
+      fetchDetails(); 
     }
   };
 
@@ -113,7 +117,6 @@ export default function RideDetailsPage() {
         </div>
       </div>
 
-      {/* SE FOR CONDUTOR: LISTA DE GESTÃO */}
       {isDriver ? (
         <div className="space-y-4">
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
@@ -130,7 +133,6 @@ export default function RideDetailsPage() {
           </div>
         </div>
       ) : (
-        /* SE FOR PASSAGEIRO: BOTÃO DE PEDIDO OU STATUS */
         <div className="space-y-4">
           {!userBooking ? (
             <Button 
@@ -153,7 +155,6 @@ export default function RideDetailsPage() {
         </div>
       )}
 
-      {/* CHAT: Só aparece para o condutor ou passageiros confirmados */}
       {(isDriver || userBooking?.status === 'accepted' || userBooking?.status === 'CONFIRMED') && (
         <div className="space-y-3">
           <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Conversa</div>

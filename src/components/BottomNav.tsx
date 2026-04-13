@@ -1,50 +1,47 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Search, PlusCircle, User, MessageCircle } from 'lucide-react';
+import { Home, Search, PlusCircle, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
 export default function BottomNav() {
   const { user } = useAuth();
   const location = useLocation();
-  const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [hasActivity, setHasActivity] = useState(false);
 
   useEffect(() => {
     if (!user) return;
 
-    // Função para verificar se há mensagens recentes (últimos 10 mins ou desde o último login)
-    // Para simplificar, vamos apenas ver se houve inserções na tabela de mensagens
+    // Ouve qualquer nova mensagem no sistema
     const channel = supabase
-      .channel('global-messages')
+      .channel('global-notifications')
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'messages' },
         (payload) => {
-          // Se a mensagem não for nossa, mostramos o alerta
-          if (payload.new.sender_id !== user.id) {
-            setHasNewMessages(true);
+          // Se a mensagem não é minha e não estou na página da viagem, ativa o alerta
+          if (payload.new.sender_id !== user.id && !location.pathname.includes(payload.new.ride_id)) {
+            setHasActivity(true);
           }
         }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user]);
+    return () => { supabase.removeChannel(channel); };
+  }, [user, location.pathname]);
 
-  // Se o utilizador clicar na pesquisa/chat, limpamos o alerta
+  // Limpa o ponto vermelho quando o utilizador vai ao Perfil
   useEffect(() => {
-    if (location.pathname.includes('/ride/')) {
-      setHasNewMessages(false);
+    if (location.pathname === '/profile') {
+      setHasActivity(false);
     }
-  }, [location]);
+  }, [location.pathname]);
 
   const navItems = [
     { to: '/', icon: Home, label: 'Home' },
-    { to: '/search', icon: Search, label: 'Procurar', badge: hasNewMessages },
+    { to: '/search', icon: Search, label: 'Procurar' },
     { to: '/post', icon: PlusCircle, label: 'Post' },
-    { to: '/profile', icon: User, label: 'Perfil' },
+    { to: '/profile', icon: User, label: 'Perfil', badge: hasActivity },
   ];
 
   return (
@@ -59,12 +56,11 @@ export default function BottomNav() {
             }`
           }
         >
-          <item.icon className={`w-6 h-6 ${item.badge ? 'animate-bounce' : ''}`} />
+          <item.icon className="w-6 h-6" />
           <span className="text-[10px] font-bold uppercase tracking-widest">{item.label}</span>
           
-          {/* O PONTO VERMELHO (NOTIFICAÇÃO) */}
           {item.badge && (
-            <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
+            <span className="absolute -top-1 -right-0.5 w-3 h-3 bg-red-500 border-2 border-white rounded-full animate-pulse" />
           )}
         </NavLink>
       ))}
