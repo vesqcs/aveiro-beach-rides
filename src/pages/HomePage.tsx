@@ -29,10 +29,20 @@ export default function HomePage() {
       const now = new Date();
       const todayStr = now.toISOString().split('T')[0];
 
-      // Verificar reservas aceites onde o utilizador é passageiro
       const { data: bookings } = await supabase
         .from('bookings')
-        .select('ride_id, rides(*, profiles:driver_id(full_name))')
+        .select(`
+          ride_id, 
+          rides(
+            id, 
+            status, 
+            ride_date, 
+            destination, 
+            driver_id,
+            seats_available,
+            profiles:driver_id(full_name)
+          )
+        `)
         .eq('passenger_id', user.id)
         .eq('status', 'accepted');
 
@@ -40,12 +50,11 @@ export default function HomePage() {
         for (const b of bookings) {
           if (!b.rides) continue;
 
-          // CONDIÇÃO HÍBRIDA MELHORADA
-          const isCompleted = b.rides.status === 'completed';
-          const isPastDate = b.rides.ride_date < todayStr;
+          const rideData: any = b.rides;
+          const isCompleted = rideData.status === 'completed';
+          const isPastDate = rideData.ride_date < todayStr;
 
           if (isCompleted || isPastDate) {
-            // Verificar se este passageiro já avaliou ESTA viagem
             const { data: review } = await supabase
               .from('reviews')
               .select('id')
@@ -54,7 +63,7 @@ export default function HomePage() {
               .maybeSingle();
 
             if (!review) {
-              setRideToRate(b.rides);
+              setRideToRate(rideData);
               break; 
             }
           }

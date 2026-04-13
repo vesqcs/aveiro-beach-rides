@@ -25,24 +25,29 @@ export default function SearchPage() {
   const fetchRides = async () => {
     setLoading(true);
     try {
-      // Definimos o momento atual para filtrar apenas viagens que ainda não passaram
       const today = new Date().toISOString().split('T')[0];
 
+      // CORREÇÃO: Pedimos explicitamente seats_available e price
       let query = supabase
         .from('rides')
         .select(`
-          *,
+          id,
+          origin,
+          destination,
+          ride_date,
+          ride_time,
+          price,
+          seats_available,
+          driver_id,
+          status,
           profiles:driver_id (
             full_name,
-            car_model,
-            car_color,
-            car_plate,
             rating
           )
         `)
         .eq('status', 'active')
-        .gt('seats_available', 0)
-        .gte('ride_date', today) // FILTRO CRUCIAL: Apenas viagens de hoje para a frente
+        .gt('seats_available', 0) // Filtra pelo novo nome da coluna
+        .gte('ride_date', today)
         .order('ride_date', { ascending: true })
         .order('ride_time', { ascending: true });
 
@@ -62,7 +67,7 @@ export default function SearchPage() {
       if (error) throw error;
       setRides(data || []);
     } catch (error: any) {
-      console.error(error);
+      console.error('Erro na pesquisa:', error);
       toast.error('Erro ao carregar boleias');
     } finally {
       setLoading(false);
@@ -162,9 +167,9 @@ export default function SearchPage() {
       ) : rides.length === 0 ? (
         <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200">
           <Filter className="w-12 h-12 mx-auto mb-4 text-slate-200" />
-          <p className="font-bold text-slate-800">Sem boleias para hoje</p>
+          <p className="font-bold text-slate-800">Sem boleias encontradas</p>
           <p className="text-sm text-slate-400 px-10 mt-2">
-            Não encontrámos viagens ativas. Tenta mudar o destino ou a data.
+            Tenta mudar os filtros ou publica uma nova viagem!
           </p>
         </div>
       ) : (

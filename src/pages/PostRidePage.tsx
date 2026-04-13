@@ -66,14 +66,16 @@ export default function PostRidePage() {
     }
 
     setLoading(true);
+    
+    // CORREÇÃO: Mapeamento exato para as colunas da base de dados
     const { error } = await supabase.from('rides').insert({
       driver_id: user.id,
       origin: origin.trim(),
       destination: destination.trim(),
       ride_date: rideDate,
       ride_time: rideTime,
-      seats_available: parseInt(seats),
-      cost_share: cost,
+      seats_available: parseInt(seats), // Corrigido de 'seats'
+      price: cost,                     // Corrigido de 'cost_share'
       status: 'active'
     });
 

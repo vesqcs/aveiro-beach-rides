@@ -103,8 +103,9 @@ export default function RideDetailsPage() {
             <span className="text-[10px] font-black text-primary uppercase tracking-widest">Destino</span>
             <h2 className="text-2xl font-black text-slate-900 italic uppercase tracking-tighter">{ride.destination}</h2>
           </div>
+          {/* CORREÇÃO: Usamos 'price' em vez de 'cost_share' */}
           <Badge className="bg-slate-900 text-white font-black px-3 py-1 text-sm rounded-xl">
-            {ride.cost_share}€
+            {ride.price}€
           </Badge>
         </div>
         
@@ -113,6 +114,8 @@ export default function RideDetailsPage() {
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-300" /> {new Date(ride.ride_date).toLocaleDateString()}</div>
             <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-300" /> {ride.ride_time}</div>
+            {/* ADICIONADO: Lugares disponíveis para o passageiro ver */}
+            <div className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-300" /> {ride.seats_available} vagas</div>
           </div>
         </div>
       </div>
@@ -137,17 +140,18 @@ export default function RideDetailsPage() {
           {!userBooking ? (
             <Button 
               onClick={handleRequestRide}
+              disabled={ride.seats_available <= 0}
               className="w-full h-16 bg-primary hover:bg-primary/90 text-white rounded-[24px] font-black uppercase italic tracking-widest shadow-xl shadow-primary/20 gap-3"
             >
-              <Send className="w-5 h-5" /> Reservar Lugar
+              <Send className="w-5 h-5" /> {ride.seats_available > 0 ? 'Reservar Lugar' : 'Esgotado'}
             </Button>
           ) : (
             <div className={`p-4 rounded-[24px] border text-center font-black uppercase text-xs italic tracking-widest ${
-              userBooking.status === 'accepted' || userBooking.status === 'CONFIRMED'
+              userBooking.status === 'accepted' || userBooking.status === 'confirmed'
               ? 'bg-green-50 text-green-600 border-green-100' 
               : 'bg-yellow-50 text-yellow-600 border-yellow-100'
             }`}>
-              {userBooking.status === 'accepted' || userBooking.status === 'CONFIRMED' 
+              {userBooking.status === 'accepted' || userBooking.status === 'confirmed' 
                 ? '✅ Estás confirmado nesta boleia!' 
                 : '⏳ Pedido enviado. Aguarda o condutor.'}
             </div>
@@ -155,7 +159,7 @@ export default function RideDetailsPage() {
         </div>
       )}
 
-      {(isDriver || userBooking?.status === 'accepted' || userBooking?.status === 'CONFIRMED') && (
+      {(isDriver || userBooking?.status === 'accepted' || userBooking?.status === 'confirmed') && (
         <div className="space-y-3">
           <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Conversa</div>
           <RideChat rideId={ride.id} />

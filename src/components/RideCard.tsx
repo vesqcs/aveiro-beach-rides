@@ -10,7 +10,6 @@ export default function RideCard({ ride }: { ride: any }) {
 
   useEffect(() => {
     const fetchRating = async () => {
-      // Chamamos a função que criámos no SQL
       const { data, error } = await supabase.rpc('get_user_rating', { 
         user_uuid: ride.driver_id 
       });
@@ -33,7 +32,6 @@ export default function RideCard({ ride }: { ride: any }) {
             <div className="flex items-center gap-2">
               <span className="font-bold text-slate-900">{ride.profiles?.full_name}</span>
               
-              {/* SISTEMA DE ESTRELAS NO CARD */}
               <div className="flex items-center bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100">
                 <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
                 <span className="text-[10px] font-black text-yellow-700 ml-1">
@@ -68,7 +66,8 @@ export default function RideCard({ ride }: { ride: any }) {
             </div>
             <div className="flex items-center gap-1.5 text-slate-500">
               <Users className="w-4 h-4" />
-              <span className="text-xs font-bold">{ride.available_seats} lugares</span>
+              {/* CORRIGIDO AQUI: seats_available em vez de available_seats */}
+              <span className="text-xs font-bold">{ride.seats_available} lugares</span>
             </div>
           </div>
         </div>
