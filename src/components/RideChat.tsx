@@ -3,43 +3,60 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send } from 'lucide-react';
+import { Send, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+import RatingModal from '@/components/RatingModal';
 
 export default function RideChat({ rideId }: { rideId: string }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [isDriver, setIsDriver] = useState(false);
+  const [rideStatus, setRideStatus] = useState('active');
+  const [rideData, setRideData] = useState<any>(null);
+  const [showRating, setShowRating] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Função para carregar mensagens
-  const fetchMessages = async () => {
-    const { data } = await supabase
+  const fetchData = async () => {
+    const { data: ride } = await supabase
+      .from('rides')
+      .select('*, profiles:driver_id(full_name)')
+      .eq('id', rideId)
+      .single();
+    
+    if (ride) {
+      setRideData(ride);
+      setIsDriver(ride.driver_id === user?.id);
+      setRideStatus(ride.status);
+    }
+
+    const { data: msgs } = await supabase
       .from('messages')
       .select('*, profiles:sender_id(full_name)')
       .eq('ride_id', rideId)
       .order('created_at', { ascending: true });
-    if (data) setMessages(data);
+    
+    if (msgs) setMessages(msgs);
   };
 
   useEffect(() => {
     if (!rideId) return;
+    fetchData();
 
-    fetchMessages();
-
-    // Ligar o Realtime
     const channel = supabase
-      .channel('schema-db-changes')
+      .channel(`ride-chat-${rideId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `ride_id=eq.${rideId}`,
-        },
-        () => {
-          // Quando houver uma nova mensagem, recarregamos a lista
-          fetchMessages();
+        { event: '*', schema: 'public', table: 'messages', filter: `ride_id=eq.${rideId}` },
+        () => fetchData()
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'rides', filter: `id=eq.${rideId}` },
+        (payload) => {
+          setRideStatus(payload.new.status);
+          // Se o status mudar para completed e não formos o condutor, 
+          // a HomePage tratará de mostrar o modal na próxima navegação.
         }
       )
       .subscribe();
@@ -47,18 +64,32 @@ export default function RideChat({ rideId }: { rideId: string }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [rideId]);
+  }, [rideId, user]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const handleFinishRide = async () => {
+    const { error } = await supabase
+      .from('rides')
+      .update({ status: 'completed' })
+      .eq('id', rideId);
+
+    if (error) {
+      toast.error("Erro ao terminar viagem");
+    } else {
+      toast.success("Viagem concluída!");
+      setShowRating(true); // DISPARA O POP-UP NA HORA
+    }
+  };
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newMessage.trim() || !user) return;
 
     const content = newMessage.trim();
-    setNewMessage(''); // Limpa logo o input para dar sensação de rapidez
+    setNewMessage('');
 
     const { error } = await supabase.from('messages').insert({
       ride_id: rideId,
@@ -68,15 +99,44 @@ export default function RideChat({ rideId }: { rideId: string }) {
 
     if (error) {
       console.error("Erro ao enviar:", error);
-      fetchMessages(); // Se der erro, recarrega para sincronizar
+      fetchData();
     }
   };
 
   return (
-    <div className="flex flex-col h-[450px] bg-white rounded-2xl border shadow-inner overflow-hidden">
-      <div className="bg-slate-50 px-4 py-2 border-b">
+    <div className="flex flex-col h-[500px] bg-white rounded-2xl border shadow-inner overflow-hidden relative">
+      {/* MODAL DE AVALIAÇÃO IMEDIATO */}
+      {showRating && (
+        <RatingModal 
+          ride={rideData} 
+          onComplete={() => {
+            setShowRating(false);
+            window.location.href = '/'; 
+          }} 
+        />
+      )}
+
+      <div className="bg-slate-50 px-4 py-2 border-b flex justify-between items-center">
         <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Chat da Boleia</span>
+        {rideStatus === 'completed' && (
+          <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold uppercase">Concluída</span>
+        )}
       </div>
+
+      {isDriver && rideStatus === 'active' && (
+        <div className="bg-primary/5 p-3 flex items-center justify-between border-b border-primary/10">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-primary uppercase">Chegaram ao destino?</span>
+          </div>
+          <Button 
+            size="sm" 
+            onClick={handleFinishRide}
+            className="bg-primary text-white font-black text-[10px] h-8 px-4 rounded-xl uppercase"
+          >
+            Terminar 🏁
+          </Button>
+        </div>
+      )}
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.map((msg) => (
@@ -100,10 +160,11 @@ export default function RideChat({ rideId }: { rideId: string }) {
         <Input 
           value={newMessage}
           onChange={(e) => setNewMessage(e.target.value)}
-          placeholder="Escreve aqui..."
+          placeholder={rideStatus === 'completed' ? "Viagem terminada..." : "Escreve aqui..."}
+          disabled={rideStatus === 'completed'}
           className="flex-1 bg-slate-50 border-none focus-visible:ring-1"
         />
-        <Button type="submit" size="icon" disabled={!newMessage.trim()} className="rounded-full">
+        <Button type="submit" size="icon" disabled={!newMessage.trim() || rideStatus === 'completed'} className="rounded-full">
           <Send className="w-4 h-4" />
         </Button>
       </form>

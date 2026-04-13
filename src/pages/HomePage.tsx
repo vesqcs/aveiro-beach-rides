@@ -26,11 +26,10 @@ export default function HomePage() {
     const checkPendingReviews = async () => {
       if (!user) return;
 
-      // Procurar viagens de ontem para trás
       const now = new Date();
-      const dateStr = now.toISOString().split('T')[0];
+      const todayStr = now.toISOString().split('T')[0];
 
-      // Ver reservas aceites do utilizador
+      // Verificar reservas aceites onde o utilizador é passageiro
       const { data: bookings } = await supabase
         .from('bookings')
         .select('ride_id, rides(*, profiles:driver_id(full_name))')
@@ -41,9 +40,12 @@ export default function HomePage() {
         for (const b of bookings) {
           if (!b.rides) continue;
 
-          // Se a viagem já passou
-          if (b.rides.ride_date < dateStr) {
-            // Verificar se já existe review
+          // CONDIÇÃO HÍBRIDA MELHORADA
+          const isCompleted = b.rides.status === 'completed';
+          const isPastDate = b.rides.ride_date < todayStr;
+
+          if (isCompleted || isPastDate) {
+            // Verificar se este passageiro já avaliou ESTA viagem
             const { data: review } = await supabase
               .from('reviews')
               .select('id')
@@ -64,8 +66,7 @@ export default function HomePage() {
   }, [user]);
 
   return (
-    <div className="min-h-screen pb-20">
-      {/* Pop-up de Avaliação */}
+    <div className="min-h-screen pb-20 bg-slate-50">
       {rideToRate && (
         <RatingModal 
           ride={rideToRate} 
@@ -73,7 +74,6 @@ export default function HomePage() {
         />
       )}
 
-      {/* Hero */}
       <div className="relative h-72 overflow-hidden">
         <img src={heroImage} alt="Boleia Hero" className="w-full h-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-b from-black/40 to-slate-900/80" />
@@ -87,21 +87,21 @@ export default function HomePage() {
       <div className="px-4 -mt-8 relative z-10 space-y-6 max-w-lg mx-auto">
         <div className="grid grid-cols-2 gap-4">
           <Link to="/search">
-            <Button className="w-full h-24 flex-col gap-2 bg-white hover:bg-slate-50 text-slate-900 border-none shadow-xl rounded-2xl">
+            <Button className="w-full h-24 flex-col gap-2 bg-white hover:bg-slate-50 text-slate-900 border-none shadow-xl rounded-2xl transition-transform active:scale-95">
               <Search className="w-6 h-6 text-primary" />
-              <span className="text-sm font-bold uppercase tracking-tight">{t.find_ride}</span>
+              <span className="text-sm font-black uppercase tracking-tight">{t.find_ride}</span>
             </Button>
           </Link>
           <Link to="/post">
-            <Button className="w-full h-24 flex-col gap-2 bg-white hover:bg-slate-50 text-slate-900 border-none shadow-xl rounded-2xl">
+            <Button className="w-full h-24 flex-col gap-2 bg-white hover:bg-slate-50 text-slate-900 border-none shadow-xl rounded-2xl transition-transform active:scale-95">
               <PlusCircle className="w-6 h-6 text-primary" />
-              <span className="text-sm font-bold uppercase tracking-tight">{t.offer_ride}</span>
+              <span className="text-sm font-black uppercase tracking-tight">{t.offer_ride}</span>
             </Button>
           </Link>
         </div>
 
         <div>
-          <h2 className="text-md font-black text-slate-800 mb-3 uppercase tracking-tight px-1">{t.popular_destinations}</h2>
+          <h2 className="text-xs font-black text-slate-400 mb-3 uppercase tracking-[0.2em] px-1">{t.popular_destinations}</h2>
           <div className="flex gap-2 overflow-x-auto pb-4 -mx-1 px-1 no-scrollbar">
             {destinations.map((d) => (
               <Link key={d.name} to={`/search?destination=${encodeURIComponent(d.name)}`} className="flex-shrink-0 bg-white border border-slate-100 shadow-sm rounded-xl px-4 py-3 flex items-center gap-2">
@@ -112,15 +112,15 @@ export default function HomePage() {
           </div>
         </div>
 
-        <div className="bg-slate-900 text-white rounded-2xl p-6 space-y-4 shadow-lg">
-          <h3 className="font-bold flex items-center gap-2 text-lg">
+        <div className="bg-slate-900 text-white rounded-3xl p-6 space-y-4 shadow-2xl">
+          <h3 className="font-black flex items-center gap-2 text-lg uppercase italic tracking-tighter">
             <MapPin className="w-5 h-5 text-primary" /> {t.how_it_works}
           </h3>
           <ol className="text-sm text-slate-300 space-y-3">
             {t.steps.map((step, i) => (
-              <li key={i} className="flex gap-3">
-                <span className="flex-shrink-0 w-5 h-5 bg-primary text-slate-900 rounded-full flex items-center justify-center text-[10px] font-black">{i + 1}</span>
-                {step}
+              <li key={i} className="flex gap-3 items-start">
+                <span className="flex-shrink-0 w-5 h-5 bg-primary text-slate-900 rounded-full flex items-center justify-center text-[10px] font-black mt-0.5">{i + 1}</span>
+                <span className="leading-snug">{step}</span>
               </li>
             ))}
           </ol>

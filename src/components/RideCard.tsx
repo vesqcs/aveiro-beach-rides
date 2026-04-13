@@ -1,90 +1,78 @@
-import { useNavigate } from 'react-router-dom';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { MapPin, Navigation2, Calendar, Clock, Car, Star, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import { Star, MapPin, Clock, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Link } from 'react-router-dom';
 
-interface RideCardProps {
-  ride: any;
-  showBookButton?: boolean;
-  bookingStatus?: string;
-}
+export default function RideCard({ ride }: { ride: any }) {
+  const [rating, setRating] = useState<number | null>(null);
+  const [totalReviews, setTotalReviews] = useState(0);
 
-export default function RideCard({ ride, showBookButton, bookingStatus }: RideCardProps) {
-  const navigate = useNavigate();
-
-  const handleBooking = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        toast.error('Precisas de estar ligado para reservar');
-        return;
-      }
-      const { error } = await supabase.from('bookings').insert({
-        ride_id: ride.id,
-        passenger_id: user.id,
-        status: 'pending'
+  useEffect(() => {
+    const fetchRating = async () => {
+      // Chamamos a função que criámos no SQL
+      const { data, error } = await supabase.rpc('get_user_rating', { 
+        user_uuid: ride.driver_id 
       });
-      if (error) throw error;
-      toast.success('Pedido de reserva enviado!');
-    } catch (error) {
-      toast.error('Erro ao fazer reserva');
-    }
-  };
+
+      if (data && data[0]) {
+        setRating(data[0].avg_rating);
+        setTotalReviews(data[0].total_count);
+      }
+    };
+
+    fetchRating();
+  }, [ride.driver_id]);
 
   return (
-    <Card 
-      onClick={() => navigate(`/ride/${ride.id}`)}
-      className="overflow-hidden border-slate-200 hover:border-primary/50 transition-all hover:shadow-md cursor-pointer group"
-    >
-      <div className="p-4 space-y-4">
-        <div className="flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center border">
-              <Car className="w-5 h-5 text-slate-400" />
-            </div>
-            <div>
-              <p className="font-bold text-sm text-slate-800">{ride.profiles?.full_name}</p>
-              <div className="flex items-center gap-1 text-[10px] text-amber-500 font-bold">
-                <Star className="w-3 h-3 fill-current" />
-                {ride.profiles?.rating || 'Novo'}
+    <Link to={`/ride/${ride.id}`}>
+      <div className="bg-white border border-slate-100 rounded-[24px] p-5 shadow-sm hover:shadow-md transition-all active:scale-[0.98] group">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black text-primary uppercase tracking-widest mb-1">Condutor</span>
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-slate-900">{ride.profiles?.full_name}</span>
+              
+              {/* SISTEMA DE ESTRELAS NO CARD */}
+              <div className="flex items-center bg-yellow-50 px-2 py-0.5 rounded-full border border-yellow-100">
+                <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                <span className="text-[10px] font-black text-yellow-700 ml-1">
+                  {rating && rating > 0 ? rating : 'Novo'}
+                </span>
+                {totalReviews > 0 && (
+                  <span className="text-[8px] text-yellow-600/60 ml-1">({totalReviews})</span>
+                )}
               </div>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-lg font-black text-primary">{ride.cost_share}€</p>
+          <div className="bg-slate-900 text-white px-3 py-1 rounded-full text-xs font-black italic">
+            {ride.price}€
           </div>
         </div>
 
-        <div className="relative space-y-3 pl-6 italic">
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-700">
-            <MapPin className="w-4 h-4 text-slate-400" /> {ride.origin}
-          </div>
-          <div className="flex items-center gap-3 text-sm font-semibold text-slate-700">
-            <Navigation2 className="w-4 h-4 text-primary" /> {ride.destination}
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-2 border-t border-slate-50">
-          <div className="flex gap-4 text-[11px] text-slate-500">
-            <div className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {new Date(ride.ride_date).toLocaleDateString()}</div>
-            <div className="flex items-center gap-1"><Clock className="w-3 h-3" /> {ride.ride_time}</div>
-          </div>
-        </div>
-
-        <div className="pt-2">
-          {showBookButton ? (
-            <Button onClick={handleBooking} className="w-full font-bold h-9 text-xs">Reservar Lugar</Button>
-          ) : (
-            <div className="w-full text-center py-2 text-[10px] text-slate-400 font-bold uppercase flex items-center justify-center gap-1">
-              Ver detalhes e Chat <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 bg-slate-50 rounded-full flex items-center justify-center">
+              <MapPin className="w-4 h-4 text-slate-400" />
             </div>
-          )}
+            <div className="flex flex-col">
+              <span className="text-[10px] text-slate-400 uppercase font-bold leading-none">Destino</span>
+              <span className="text-sm font-bold text-slate-700">{ride.destination}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-slate-50">
+            <div className="flex items-center gap-1.5 text-slate-500">
+              <Clock className="w-4 h-4" />
+              <span className="text-xs font-bold">{ride.ride_time}</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-slate-500">
+              <Users className="w-4 h-4" />
+              <span className="text-xs font-bold">{ride.available_seats} lugares</span>
+            </div>
+          </div>
         </div>
       </div>
-    </Card>
+    </Link>
   );
 }
