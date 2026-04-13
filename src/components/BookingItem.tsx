@@ -9,45 +9,40 @@ export default function BookingItem({ booking, onUpdate }: { booking: any, onUpd
   const [totalReviews, setTotalReviews] = useState(0);
 
   useEffect(() => {
-    const fetchPassengerRating = async () => {
-      const { data } = await supabase.rpc('get_user_rating', { 
-        user_uuid: booking.passenger_id 
-      });
-
+    const fetchRating = async () => {
+      const { data } = await supabase.rpc('get_user_rating', { user_uuid: booking.passenger_id });
       if (data && data[0]) {
         setRating(data[0].avg_rating);
         setTotalReviews(data[0].total_count);
       }
     };
-    fetchPassengerRating();
+    fetchRating();
   }, [booking.passenger_id]);
 
   const updateStatus = async (status: 'accepted' | 'rejected') => {
-    const { error } = await supabase
-      .from('bookings')
-      .update({ status })
-      .eq('id', booking.id);
-
-    if (error) {
-      toast.error("Erro na operação");
-    } else {
-      toast.success(status === 'accepted' ? "Passageiro Aceite" : "Pedido Recusado");
+    const { error } = await supabase.from('bookings').update({ status }).eq('id', booking.id);
+    if (!error) {
+      toast.success(status === 'accepted' ? "Passageiro Confirmado" : "Pedido Recusado");
       onUpdate();
+    } else {
+      toast.error("Erro ao atualizar status");
     }
   };
 
+  // Lógica para verificar se o passageiro está aprovado (aceita o padrão novo e o legatário)
+  const isApproved = booking.status === 'accepted' || booking.status === 'CONFIRMED';
+
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:border-primary/20 transition-all">
+    <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:border-primary/10 transition-colors">
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner">
           <User className="w-5 h-5 text-slate-300" />
         </div>
         <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <span className="font-black text-slate-800 text-sm tracking-tight italic uppercase">
+            <span className="font-black text-slate-800 text-sm tracking-tight uppercase italic">
               {booking.profiles?.full_name}
             </span>
-            
             <div className="flex items-center bg-yellow-50 px-1.5 py-0.5 rounded-lg border border-yellow-100 shadow-sm">
               <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               <span className="text-[10px] font-black text-yellow-700 ml-1">
@@ -56,7 +51,7 @@ export default function BookingItem({ booking, onUpdate }: { booking: any, onUpd
             </div>
           </div>
           <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
-             {totalReviews} Experiências
+            {totalReviews} Experiências
           </span>
         </div>
       </div>
@@ -66,24 +61,26 @@ export default function BookingItem({ booking, onUpdate }: { booking: any, onUpd
           <Button 
             size="icon" 
             variant="ghost" 
-            onClick={() => updateStatus('rejected')}
+            onClick={() => updateStatus('rejected')} 
             className="w-8 h-8 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
           >
             <X className="w-4 h-4" />
           </Button>
           <Button 
             size="icon" 
-            onClick={() => updateStatus('accepted')}
-            className="w-8 h-8 rounded-xl bg-primary hover:bg-primary/90 shadow-lg shadow-primary/20 transition-transform active:scale-90"
+            onClick={() => updateStatus('accepted')} 
+            className="w-8 h-8 rounded-xl bg-primary shadow-lg shadow-primary/20 hover:bg-primary/90 transition-transform active:scale-90"
           >
             <Check className="w-4 h-4 text-white" />
           </Button>
         </div>
       ) : (
-        <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl italic tracking-widest ${
-          booking.status === 'accepted' ? 'bg-green-50 text-green-600 border border-green-100' : 'bg-red-50 text-red-600 border border-red-100'
+        <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-widest italic border ${
+          isApproved 
+            ? 'bg-green-50 text-green-600 border-green-100' 
+            : 'bg-red-50 text-red-600 border-red-100'
         }`}>
-          {booking.status === 'accepted' ? 'Confirmado' : 'Recusado'}
+          {isApproved ? 'Confirmado' : 'Recusado'}
         </div>
       )}
     </div>
