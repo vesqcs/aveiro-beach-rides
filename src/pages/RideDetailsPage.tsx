@@ -194,7 +194,7 @@ export default function RideDetailsPage() {
       {/* CHAT - Disponível se a viagem não estiver concluída ou for o condutor/passageiro confirmado */}
       {(isDriver || userBooking?.status === 'accepted' || userBooking?.status === 'confirmed') && (
         <div className="space-y-3">
-          <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Conversa</div>
+          <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chat da Boleia</div>
           <RideChat rideId={ride.id} />
         </div>
       )}

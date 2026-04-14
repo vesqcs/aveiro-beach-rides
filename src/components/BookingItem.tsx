@@ -48,14 +48,14 @@ export default function BookingItem({
 
     const { error } = await supabase.from('reviews').insert({
       ride_id: booking.ride_id,
-      reviewer_id: user.id,   // Ajustado para o nome da tua tabela
-      reviewed_id: booking.passenger_id, // Ajustado para o nome da tua tabela
+      reviewer_id: user.id,   
+      reviewed_id: booking.passenger_id, 
       rating: stars
     });
 
     if (error) {
       console.error(error);
-      toast.error("Erro ao enviar avaliação");
+      toast.error("Já avaliaste este passageiro.");
     } else {
       toast.success("Avaliação enviada!");
       setHasRated(true);
@@ -65,34 +65,76 @@ export default function BookingItem({
   const isApproved = booking.status === 'accepted' || booking.status === 'CONFIRMED';
 
   return (
-    <div className={`bg-white border rounded-2xl p-4 flex items-center justify-between shadow-sm transition-all ${isRideCompleted ? 'border-slate-100' : 'border-slate-100 hover:border-primary/10'}`}>
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner overflow-hidden">
-          <User className="w-5 h-5 text-slate-300" />
-        </div>
-        <div className="flex flex-col text-left">
-          <div className="flex items-center gap-2">
-            <span className="font-black text-slate-800 text-sm tracking-tight uppercase italic">
-              {booking.profiles?.full_name}
-            </span>
-            <div className="flex items-center bg-yellow-50 px-1.5 py-0.5 rounded-lg border border-yellow-100 shadow-sm">
-              <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
-              <span className="text-[10px] font-black text-yellow-700 ml-1">
-                {rating && rating > 0 ? rating.toFixed(1) : 'NEW'}
-              </span>
-            </div>
+    <div className={`bg-white border rounded-2xl p-4 flex flex-col gap-3 shadow-sm transition-all ${isRideCompleted ? 'border-slate-100' : 'border-slate-100 hover:border-primary/10'}`}>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner overflow-hidden">
+            <User className="w-5 h-5 text-slate-300" />
           </div>
-          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest text-left">
-            {totalReviews} Experiências
-          </span>
+          <div className="flex flex-col text-left">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-slate-800 text-sm tracking-tight uppercase italic">
+                {booking.profiles?.full_name}
+              </span>
+              <div className="flex items-center bg-yellow-50 px-1.5 py-0.5 rounded-lg border border-yellow-100 shadow-sm">
+                <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
+                <span className="text-[10px] font-black text-yellow-700 ml-1">
+                  {rating && rating > 0 ? rating.toFixed(1) : 'NEW'}
+                </span>
+              </div>
+            </div>
+            <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest text-left">
+              {totalReviews} Experiências
+            </span>
+          </div>
         </div>
+
+        {/* Status ou Botões de Ação Rápida */}
+        {!isRideCompleted && (
+          <div>
+            {booking.status === 'pending' ? (
+              <div className="flex gap-2">
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  onClick={() => updateStatus('rejected')} 
+                  className="w-8 h-8 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+                <Button 
+                  size="icon" 
+                  onClick={() => updateStatus('accepted')} 
+                  className="w-8 h-8 rounded-xl bg-primary shadow-lg shadow-primary/20 hover:bg-primary/90 transition-transform active:scale-90"
+                >
+                  <Check className="w-4 h-4 text-white" />
+                </Button>
+              </div>
+            ) : (
+              <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-widest italic border ${
+                isApproved 
+                  ? 'bg-green-50 text-green-600 border-green-100' 
+                  : 'bg-red-50 text-red-600 border-red-100'
+              }`}>
+                {isApproved ? 'Confirmado' : 'Recusado'}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {isRideCompleted && isApproved ? (
-        <div className="flex flex-col items-end gap-1">
-          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">Avaliar</span>
+      {/* ÁREA DE AVALIAÇÃO: Só aparece se a viagem estiver concluída e o passageiro aprovado */}
+      {isRideCompleted && isApproved && (
+        <div className="pt-3 border-t border-slate-50 flex items-center justify-between">
+          <div className="flex flex-col">
+            <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Avaliar passageiro em</span>
+            <span className="text-[9px] font-bold text-primary uppercase italic">Boleia concluída</span>
+          </div>
+          
           {hasRated ? (
-            <div className="text-[9px] font-black text-green-500 uppercase italic">Obrigado!</div>
+            <div className="text-[9px] font-black text-green-500 uppercase italic flex items-center gap-1">
+              <Check className="w-3 h-3" /> Concluído
+            </div>
           ) : (
             <div className="flex gap-0.5">
               {[1, 2, 3, 4, 5].map((star) => (
@@ -106,32 +148,6 @@ export default function BookingItem({
               ))}
             </div>
           )}
-        </div>
-      ) : booking.status === 'pending' ? (
-        <div className="flex gap-2">
-          <Button 
-            size="icon" 
-            variant="ghost" 
-            onClick={() => updateStatus('rejected')} 
-            className="w-8 h-8 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
-          >
-            <X className="w-4 h-4" />
-          </Button>
-          <Button 
-            size="icon" 
-            onClick={() => updateStatus('accepted')} 
-            className="w-8 h-8 rounded-xl bg-primary shadow-lg shadow-primary/20 hover:bg-primary/90 transition-transform active:scale-90"
-          >
-            <Check className="w-4 h-4 text-white" />
-          </Button>
-        </div>
-      ) : (
-        <div className={`text-[9px] font-black uppercase px-3 py-1.5 rounded-xl tracking-widest italic border ${
-          isApproved 
-            ? 'bg-green-50 text-green-600 border-green-100' 
-            : 'bg-red-50 text-red-600 border-red-100'
-        }`}>
-          {isApproved ? 'Confirmado' : 'Recusado'}
         </div>
       )}
     </div>
