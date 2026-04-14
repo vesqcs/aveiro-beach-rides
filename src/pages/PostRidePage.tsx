@@ -53,12 +53,13 @@ export default function PostRidePage() {
       return;
     }
 
-    if (!origin.trim() || !destination.trim()) {
-      toast.error('Indica uma origem e um destino válidos');
+    // Validação extra de segurança
+    if (!origin.trim() || !destination.trim() || !rideDate || !rideTime || !seats) {
+      toast.error('Preenche todos os campos obrigatórios');
       return;
     }
 
-    const cost = parseFloat(costShare);
+    const cost = parseFloat(costShare.replace(',', '.')); // Garante que aceita vírgulas e pontos
     if (isNaN(cost) || cost < 0 || cost > 50) { 
       toast.error('O custo deve ser entre €0 e €50');
       return;
@@ -66,6 +67,7 @@ export default function PostRidePage() {
 
     setLoading(true);
     
+    // TENTATIVA DE INSERT
     const { error } = await supabase.from('rides').insert({
       driver_id: user.id,
       origin: origin.trim(),
@@ -73,12 +75,18 @@ export default function PostRidePage() {
       ride_date: rideDate,
       ride_time: rideTime,
       seats_available: parseInt(seats),
-      price: cost,
+      price: cost, // Mantemos 'price' pois confirmámos na imagem que é este o nome
       status: 'active'
     });
 
     if (error) {
-      toast.error('Erro ao publicar: ' + error.message);
+      console.error("Erro detalhado do Supabase:", error);
+      // Se o erro de cache persistir, mostramos uma dica ao utilizador
+      if (error.message.includes('schema cache')) {
+        toast.error('Erro de cache no servidor. Por favor, recarrega a página e tenta de novo.');
+      } else {
+        toast.error('Erro ao publicar: ' + error.message);
+      }
     } else {
       toast.success('Viagem publicada! 🚗');
       navigate('/search');
@@ -94,7 +102,6 @@ export default function PostRidePage() {
     );
   }
 
-  // NOVA MENSAGEM: Mais amigável e direta para quem não tem carro registado
   if (isDriver === false) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center space-y-6 animate-fade-up">
@@ -185,11 +192,9 @@ export default function PostRidePage() {
             </Select>
           </div>
           <div className="space-y-2">
-            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Preço (€)</Label>
+            <Label className="text-[10px] font-black text-slate-400 uppercase ml-1 tracking-widest">Contribuição (€)</Label>
             <Input
-              type="number"
-              step="0.50"
-              min="0"
+              type="text" // Mudado para text para facilitar o parseFloat com vírgulas
               className="bg-white h-12 rounded-xl border-slate-100 font-bold"
               value={costShare}
               onChange={(e) => setCostShare(e.target.value)}
@@ -202,7 +207,7 @@ export default function PostRidePage() {
         <div className="flex gap-2 p-4 bg-slate-50 rounded-2xl border border-slate-100">
           <AlertCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
           <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-            Lembra-te: este sistema serve para dividir custos de combustível e portagens. Pede um valor justo para a comunidade.
+            Lembra-te: este sistema destina-se à partilha de custos de combustível e portagens. Pede um valor justo.
           </p>
         </div>
 

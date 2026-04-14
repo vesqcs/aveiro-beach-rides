@@ -4,9 +4,18 @@ import { Star, User, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
-export default function BookingItem({ booking, onUpdate }: { booking: any, onUpdate: () => void }) {
+export default function BookingItem({ 
+  booking, 
+  onUpdate, 
+  isRideCompleted 
+}: { 
+  booking: any, 
+  onUpdate: () => void, 
+  isRideCompleted?: boolean 
+}) {
   const [rating, setRating] = useState<number | null>(null);
   const [totalReviews, setTotalReviews] = useState(0);
+  const [hasRated, setHasRated] = useState(false);
 
   useEffect(() => {
     const fetchRating = async () => {
@@ -29,16 +38,39 @@ export default function BookingItem({ booking, onUpdate }: { booking: any, onUpd
     }
   };
 
-  // Lógica para verificar se o passageiro está aprovado (aceita o padrão novo e o legatário)
+  const handleRate = async (stars: number) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (!user) {
+      toast.error("Sessão expirada");
+      return;
+    }
+
+    const { error } = await supabase.from('reviews').insert({
+      ride_id: booking.ride_id,
+      reviewer_id: user.id,   // Ajustado para o nome da tua tabela
+      reviewed_id: booking.passenger_id, // Ajustado para o nome da tua tabela
+      rating: stars
+    });
+
+    if (error) {
+      console.error(error);
+      toast.error("Erro ao enviar avaliação");
+    } else {
+      toast.success("Avaliação enviada!");
+      setHasRated(true);
+    }
+  };
+
   const isApproved = booking.status === 'accepted' || booking.status === 'CONFIRMED';
 
   return (
-    <div className="bg-white border border-slate-100 rounded-2xl p-4 flex items-center justify-between shadow-sm hover:border-primary/10 transition-colors">
+    <div className={`bg-white border rounded-2xl p-4 flex items-center justify-between shadow-sm transition-all ${isRideCompleted ? 'border-slate-100' : 'border-slate-100 hover:border-primary/10'}`}>
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner">
+        <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner overflow-hidden">
           <User className="w-5 h-5 text-slate-300" />
         </div>
-        <div className="flex flex-col">
+        <div className="flex flex-col text-left">
           <div className="flex items-center gap-2">
             <span className="font-black text-slate-800 text-sm tracking-tight uppercase italic">
               {booking.profiles?.full_name}
@@ -46,17 +78,36 @@ export default function BookingItem({ booking, onUpdate }: { booking: any, onUpd
             <div className="flex items-center bg-yellow-50 px-1.5 py-0.5 rounded-lg border border-yellow-100 shadow-sm">
               <Star className="w-2.5 h-2.5 fill-yellow-400 text-yellow-400" />
               <span className="text-[10px] font-black text-yellow-700 ml-1">
-                {rating && rating > 0 ? rating : 'NEW'}
+                {rating && rating > 0 ? rating.toFixed(1) : 'NEW'}
               </span>
             </div>
           </div>
-          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
+          <span className="text-[9px] text-slate-400 font-bold uppercase tracking-widest text-left">
             {totalReviews} Experiências
           </span>
         </div>
       </div>
 
-      {booking.status === 'pending' ? (
+      {isRideCompleted && isApproved ? (
+        <div className="flex flex-col items-end gap-1">
+          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mr-1">Avaliar</span>
+          {hasRated ? (
+            <div className="text-[9px] font-black text-green-500 uppercase italic">Obrigado!</div>
+          ) : (
+            <div className="flex gap-0.5">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button 
+                  key={star} 
+                  onClick={() => handleRate(star)}
+                  className="p-1 hover:scale-125 transition-transform"
+                >
+                  <Star className="w-4 h-4 text-slate-200 hover:text-yellow-400 hover:fill-yellow-400" />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : booking.status === 'pending' ? (
         <div className="flex gap-2">
           <Button 
             size="icon" 
