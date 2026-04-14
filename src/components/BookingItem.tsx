@@ -16,17 +16,26 @@ export default function BookingItem({
   const [rating, setRating] = useState<number | null>(null);
   const [totalReviews, setTotalReviews] = useState(0);
   const [hasRated, setHasRated] = useState(false);
+  const [rideData, setRideData] = useState<any>(null);
 
   useEffect(() => {
     const fetchInitialData = async () => {
-      // 1. Fetch do Rating do passageiro
+      // 1. Buscar detalhes da viagem para as notificações (destino)
+      const { data: ride } = await supabase
+        .from('rides')
+        .select('destination')
+        .eq('id', booking.ride_id)
+        .single();
+      if (ride) setRideData(ride);
+
+      // 2. Fetch do Rating do passageiro
       const { data: ratData } = await supabase.rpc('get_user_rating', { user_uuid: booking.passenger_id });
       if (ratData && ratData[0]) {
         setRating(ratData[0].avg_rating);
         setTotalReviews(ratData[0].total_count);
       }
 
-      // 2. Verificar se o condutor logado já avaliou este passageiro NESTA viagem
+      // 3. Verificar se o condutor logado já avaliou este passageiro
       const { data: { user } } = await supabase.auth.getUser();
       if (user && isRideCompleted) {
         const { data: existingReview } = await supabase
@@ -46,8 +55,21 @@ export default function BookingItem({
 
   const updateStatus = async (status: 'accepted' | 'rejected') => {
     const { error } = await supabase.from('bookings').update({ status }).eq('id', booking.id);
+    
     if (!error) {
-      toast.success(status === 'accepted' ? "Passageiro Confirmado" : "Pedido Recusado");
+      // 🔔 NOTIFICAÇÃO: Avisar o passageiro sobre o estado do pedido
+      const isAccepted = status === 'accepted';
+      await supabase.from('notifications').insert({
+        user_id: booking.passenger_id,
+        title: isAccepted ? 'Pedido Aceite! ✅' : 'Pedido Recusado ❌',
+        message: isAccepted 
+          ? `O condutor aceitou o teu pedido para a viagem para ${rideData?.destination || 'o destino'}.`
+          : `Lamentamos, mas o teu pedido para ${rideData?.destination || 'a viagem'} não foi aceite.`,
+        type: isAccepted ? 'booking_accepted' : 'ride_cancelled',
+        link: isAccepted ? `/ride/${booking.ride_id}` : '/search'
+      });
+
+      toast.success(isAccepted ? "Passageiro Confirmado" : "Pedido Recusado");
       onUpdate();
     } else {
       toast.error("Erro ao atualizar status");
@@ -56,11 +78,7 @@ export default function BookingItem({
 
   const handleRate = async (stars: number) => {
     const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      toast.error("Sessão expirada");
-      return;
-    }
+    if (!user) return;
 
     const { error } = await supabase.from('reviews').insert({
       ride_id: booking.ride_id,
@@ -69,12 +87,20 @@ export default function BookingItem({
       rating: stars
     });
 
-    if (error) {
-      console.error(error);
-      toast.error("Erro ao enviar avaliação ou já avaliado.");
-    } else {
+    if (!error) {
+      // 🔔 NOTIFICAÇÃO: Avisar o passageiro que recebeu uma avaliação
+      await supabase.from('notifications').insert({
+        user_id: booking.passenger_id,
+        title: 'Recebeste uma avaliação ⭐',
+        message: `O condutor avaliou-te com ${stars} estrelas pela viagem para ${rideData?.destination}.`,
+        type: 'new_review',
+        link: '/profile'
+      });
+
       toast.success("Avaliação enviada!");
       setHasRated(true);
+    } else {
+      toast.error("Erro ao enviar avaliação.");
     }
   };
 
@@ -85,7 +111,6 @@ export default function BookingItem({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-slate-50 rounded-full flex items-center justify-center border shadow-inner overflow-hidden">
-            {/* Aqui podes meter o avatar do passageiro se o tiveres no profile */}
             {booking.profiles?.avatar_url ? (
               <img src={booking.profiles.avatar_url} className="w-full h-full object-cover" />
             ) : (
@@ -110,7 +135,6 @@ export default function BookingItem({
           </div>
         </div>
 
-        {/* Status ou Botões de Ação Rápida */}
         {!isRideCompleted && (
           <div>
             {booking.status === 'pending' ? (
@@ -119,7 +143,7 @@ export default function BookingItem({
                   size="icon" 
                   variant="ghost" 
                   onClick={() => updateStatus('rejected')} 
-                  className="w-8 h-8 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50 transition-all"
+                  className="w-8 h-8 rounded-xl text-slate-300 hover:text-red-500 hover:bg-red-50"
                 >
                   <X className="w-4 h-4" />
                 </Button>
@@ -144,7 +168,6 @@ export default function BookingItem({
         )}
       </div>
 
-      {/* ÁREA DE AVALIAÇÃO: Só aparece se a viagem estiver concluída e o passageiro aprovado */}
       {isRideCompleted && isApproved && (
         <div className="pt-3 border-t border-slate-50 flex items-center justify-between animate-in fade-in slide-in-from-top-2">
           <div className="flex flex-col">
@@ -164,7 +187,7 @@ export default function BookingItem({
                   onClick={() => handleRate(star)}
                   className="p-1 hover:scale-125 transition-transform group"
                 >
-                  <Star className="w-5 h-5 text-slate-200 group-hover:text-yellow-400 group-hover:fill-yellow-400 transition-colors" />
+                  <Star className="w-5 h-5 text-slate-200 group-hover:text-yellow-400 group-hover:fill-yellow-400" />
                 </button>
               ))}
             </div>

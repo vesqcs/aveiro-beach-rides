@@ -10,6 +10,7 @@ export default function RideChat({ rideId }: { rideId: string }) {
   const { user } = useAuth();
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [rideData, setRideData] = useState<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = async () => {
@@ -27,28 +28,29 @@ export default function RideChat({ rideId }: { rideId: string }) {
   };
 
   useEffect(() => {
+    // Buscar detalhes da viagem para saber quem notificar
+    const fetchRideDetails = async () => {
+      const { data } = await supabase
+        .from('rides')
+        .select('driver_id, destination')
+        .eq('id', rideId)
+        .single();
+      setRideData(data);
+    };
+
+    fetchRideDetails();
     fetchMessages();
 
-    // Inscrição em tempo real para novas mensagens
     const channel = supabase
       .channel(`ride_chat_${rideId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'messages',
-          filter: `ride_id=eq.${rideId}`
-        },
-        () => {
-          fetchMessages(); 
-        }
+        { event: 'INSERT', schema: 'public', table: 'messages', filter: `ride_id=eq.${rideId}` },
+        () => { fetchMessages(); }
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [rideId]);
 
   useEffect(() => {
@@ -59,24 +61,57 @@ export default function RideChat({ rideId }: { rideId: string }) {
 
   const sendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !user) return;
+    if (!newMessage.trim() || !user || !rideData) return;
+
+    const messageContent = newMessage.trim();
 
     const { error } = await supabase
       .from('messages')
-      .insert([
-        { 
-          ride_id: rideId, 
-          sender_id: user.id, 
-          content: newMessage.trim() 
-          // O receiver_id fica NULL porque é um chat de grupo da viagem
-        }
-      ]);
+      .insert([{ 
+        ride_id: rideId, 
+        sender_id: user.id, 
+        content: messageContent 
+      }]);
 
     if (error) {
-      console.error("Erro Supabase:", error);
       toast.error("Erro ao enviar mensagem");
     } else {
       setNewMessage('');
+      
+      // 🔔 LÓGICA DE NOTIFICAÇÕES DO CHAT
+      try {
+        // 1. Se quem enviou foi o PASSAGEIRO, notificar o CONDUTOR
+        if (user.id !== rideData.driver_id) {
+          await supabase.from('notifications').insert({
+            user_id: rideData.driver_id,
+            title: 'Nova mensagem no chat 💬',
+            message: `Um passageiro escreveu na viagem para ${rideData.destination}: "${messageContent.substring(0, 30)}..."`,
+            type: 'new_message',
+            link: `/ride/${rideId}`
+          });
+        } 
+        // 2. Se quem enviou foi o CONDUTOR, notificar TODOS os passageiros aceites
+        else {
+          const { data: acceptedBookings } = await supabase
+            .from('bookings')
+            .select('passenger_id')
+            .eq('ride_id', rideId)
+            .in('status', ['accepted', 'confirmed']);
+
+          if (acceptedBookings && acceptedBookings.length > 0) {
+            const notifications = acceptedBookings.map(b => ({
+              user_id: b.passenger_id,
+              title: 'Mensagem do Condutor 🚗',
+              message: `O condutor disse: "${messageContent.substring(0, 30)}..."`,
+              type: 'new_message',
+              link: `/ride/${rideId}`
+            }));
+            await supabase.from('notifications').insert(notifications);
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao disparar notificações do chat:", err);
+      }
     }
   };
 
