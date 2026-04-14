@@ -33,31 +33,41 @@ export default function ProfilePage() {
       setEditAvatar(prof.avatar_url || '');
     }
 
-    // 2. Ratings (Média e Contagem via RPC)
+    // 2. Ratings
     const { data: rat } = await supabase.rpc('get_user_rating', { user_uuid: user.id });
     if (rat && rat[0]) setRating({ avg: rat[0].avg_rating, count: rat[0].total_count });
 
-    // 3. Viagens como Condutor
-    const { data: driverRides } = await supabase.from('rides').select('*').eq('driver_id', user.id);
+    // 3. Viagens como Condutor (FILTRO: Não mostrar canceladas)
+    const { data: driverRides } = await supabase
+      .from('rides')
+      .select('*')
+      .eq('driver_id', user.id)
+      .neq('status', 'cancelled'); // <- ESTA LINHA É A CHAVE
     
-    // 4. Viagens como Passageiro (Apenas aceites ou confirmadas)
+    // 4. Viagens como Passageiro (FILTRO: Apenas aceites ou confirmadas)
     const { data: passengerBookings } = await supabase
       .from('bookings')
-      .select('rides(*)')
+      .select(`
+        ride_id,
+        status,
+        rides (*)
+      `)
       .eq('passenger_id', user.id)
-      .in('status', ['accepted', 'CONFIRMED']);
+      .in('status', ['accepted', 'confirmed', 'pending']); // Incluímos pending para ele ver que pediu
 
     const ridesAsDriver = (driverRides || []).map(r => ({ ...r, role: 'driver' }));
+    
+    // Filtrar para garantir que a viagem existe e NÃO foi cancelada pelo condutor
     const ridesAsPassenger = (passengerBookings || [])
-      .filter(b => b.rides !== null)
+      .filter(b => b.rides !== null && b.rides.status !== 'cancelled')
       .map(b => ({ ...b.rides, role: 'passenger' }));
 
-    // Unificar e ordenar por data decrescente
+    // Unificar e ordenar
     const allRides = [...ridesAsDriver, ...ridesAsPassenger].sort((a, b) => 
       new Date(b.ride_date).getTime() - new Date(a.ride_date).getTime()
     );
 
-    // 5. Verificar notificações de mensagens não lidas
+    // 5. Notificações de mensagens
     const ridesWithNotifs = await Promise.all(allRides.map(async (ride) => {
       const lastVisit = localStorage.getItem(`last_visit_${ride.id}`) || new Date(0).toISOString();
       const { count } = await supabase.from('messages')
@@ -74,10 +84,14 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfileData();
-    // Real-time para novas mensagens refletirem a bolinha vermelha no perfil
-    const channel = supabase.channel('profile-updates')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => fetchProfileData())
+    
+    // Real-time: Atualiza a lista se houver mudanças nas viagens ou mensagens
+    const channel = supabase.channel('profile-monitor')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rides' }, () => fetchProfileData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => fetchProfileData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings', filter: `passenger_id=eq.${user?.id}` }, () => fetchProfileData())
       .subscribe();
+
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
@@ -103,38 +117,18 @@ export default function ProfilePage() {
     navigate('/auth');
   };
 
-  // Lógica de Status Dinâmico (Sincronizado com Detalhes e Pesquisa)
   const getRideStatus = (ride: any) => {
-    // 1. Se o condutor já finalizou a viagem
     if (ride.status === 'completed') {
-      return { 
-        label: 'Concluída', 
-        color: 'bg-blue-50 text-blue-600 border-blue-100', 
-        icon: <CheckCircle2 className="w-2.5 h-2.5" /> 
-      };
+      return { label: 'Concluída', color: 'bg-blue-50 text-blue-600 border-blue-100', icon: <CheckCircle2 className="w-2.5 h-2.5" /> };
     }
-    
-    // Comparação de tempo real
     const rideDateTime = new Date(`${ride.ride_date}T${ride.ride_time}`);
-    const now = new Date();
-
-    // 2. Se a hora já passou mas ainda não foi finalizada (Em curso)
-    if (now >= rideDateTime) {
-      return { 
-        label: 'Em Curso', 
-        color: 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse', 
-        icon: <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div> 
-      };
+    if (new Date() >= rideDateTime) {
+      return { label: 'Em Curso', color: 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse', icon: <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div> };
     }
-    
-    // 3. Viagem futura
-    return { 
-      label: 'Agendada', 
-      color: 'bg-green-50 text-green-600 border-green-100', 
-      icon: null 
-    };
+    return { label: 'Agendada', color: 'bg-green-50 text-green-600 border-green-100', icon: null };
   };
 
+  // ... (o resto do return permanece igual ao teu código original)
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       {/* Header Perfil */}
@@ -191,7 +185,6 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Listagem de Atividade */}
       <div className="px-4 mt-6 max-w-lg mx-auto space-y-6">
         <div className="space-y-3">
           <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 italic">Atividade Recente</h2>
