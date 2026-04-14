@@ -24,7 +24,7 @@ export default function ProfilePage() {
   const fetchProfileData = async () => {
     if (!user) return;
     
-    // 1. Perfil
+    // 1. Dados do Perfil
     const { data: prof } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
     if (prof) {
       setProfile(prof);
@@ -33,14 +33,14 @@ export default function ProfilePage() {
       setEditAvatar(prof.avatar_url || '');
     }
 
-    // 2. Ratings (RPC que criaste anteriormente)
+    // 2. Ratings (Média e Contagem via RPC)
     const { data: rat } = await supabase.rpc('get_user_rating', { user_uuid: user.id });
     if (rat && rat[0]) setRating({ avg: rat[0].avg_rating, count: rat[0].total_count });
 
-    // 3. Viagens como Condutor (incluindo o status real)
+    // 3. Viagens como Condutor
     const { data: driverRides } = await supabase.from('rides').select('*').eq('driver_id', user.id);
     
-    // 4. Viagens como Passageiro (filtramos apenas as confirmadas)
+    // 4. Viagens como Passageiro (Apenas aceites ou confirmadas)
     const { data: passengerBookings } = await supabase
       .from('bookings')
       .select('rides(*)')
@@ -52,11 +52,12 @@ export default function ProfilePage() {
       .filter(b => b.rides !== null)
       .map(b => ({ ...b.rides, role: 'passenger' }));
 
+    // Unificar e ordenar por data decrescente
     const allRides = [...ridesAsDriver, ...ridesAsPassenger].sort((a, b) => 
       new Date(b.ride_date).getTime() - new Date(a.ride_date).getTime()
     );
 
-    // 5. Notificações de Chat
+    // 5. Verificar notificações de mensagens não lidas
     const ridesWithNotifs = await Promise.all(allRides.map(async (ride) => {
       const lastVisit = localStorage.getItem(`last_visit_${ride.id}`) || new Date(0).toISOString();
       const { count } = await supabase.from('messages')
@@ -73,6 +74,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     fetchProfileData();
+    // Real-time para novas mensagens refletirem a bolinha vermelha no perfil
     const channel = supabase.channel('profile-updates')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => fetchProfileData())
       .subscribe();
@@ -101,18 +103,36 @@ export default function ProfilePage() {
     navigate('/auth');
   };
 
-  // CORREÇÃO: Lógica de status baseada no campo 'status' da DB
+  // Lógica de Status Dinâmico (Sincronizado com Detalhes e Pesquisa)
   const getRideStatus = (ride: any) => {
+    // 1. Se o condutor já finalizou a viagem
     if (ride.status === 'completed') {
-      return { label: 'Concluída', color: 'bg-blue-50 text-blue-600 border-blue-100', icon: <CheckCircle2 className="w-2.5 h-2.5" /> };
+      return { 
+        label: 'Concluída', 
+        color: 'bg-blue-50 text-blue-600 border-blue-100', 
+        icon: <CheckCircle2 className="w-2.5 h-2.5" /> 
+      };
     }
     
-    const today = new Date().toISOString().split('T')[0];
-    if (ride.ride_date < today) {
-      return { label: 'Terminada', color: 'bg-slate-100 text-slate-500 border-slate-200' };
+    // Comparação de tempo real
+    const rideDateTime = new Date(`${ride.ride_date}T${ride.ride_time}`);
+    const now = new Date();
+
+    // 2. Se a hora já passou mas ainda não foi finalizada (Em curso)
+    if (now >= rideDateTime) {
+      return { 
+        label: 'Em Curso', 
+        color: 'bg-amber-50 text-amber-600 border-amber-200 animate-pulse', 
+        icon: <div className="w-1.5 h-1.5 bg-amber-600 rounded-full"></div> 
+      };
     }
     
-    return { label: 'Agendada', color: 'bg-green-50 text-green-600 border-green-100' };
+    // 3. Viagem futura
+    return { 
+      label: 'Agendada', 
+      color: 'bg-green-50 text-green-600 border-green-100', 
+      icon: null 
+    };
   };
 
   return (
@@ -159,7 +179,7 @@ export default function ProfilePage() {
               <div className="flex items-center justify-center gap-3">
                 <div className="flex items-center text-yellow-600 bg-yellow-50 px-2.5 py-1 rounded-full border border-yellow-100">
                   <Star className="w-3 h-3 fill-yellow-500 text-yellow-500" />
-                  <span className="text-xs font-black ml-1.5">{rating.avg ? rating.avg.toFixed(1) : '0.0'}</span>
+                  <span className="text-xs font-black ml-1.5">{rating.avg ? Number(rating.avg).toFixed(1) : '0.0'}</span>
                 </div>
                 <span className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">{rating.count} Experiências</span>
               </div>
@@ -171,7 +191,7 @@ export default function ProfilePage() {
         )}
       </div>
 
-      {/* Histórico de Viagens */}
+      {/* Listagem de Atividade */}
       <div className="px-4 mt-6 max-w-lg mx-auto space-y-6">
         <div className="space-y-3">
           <h2 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 italic">Atividade Recente</h2>
@@ -183,7 +203,11 @@ export default function ProfilePage() {
                 const statusInfo = getRideStatus(ride);
                 const isDriver = ride.role === 'driver';
                 return (
-                  <button key={`${ride.id}-${ride.role}`} onClick={() => navigate(`/ride/${ride.id}`)} className="w-full bg-white border border-slate-100 p-4 rounded-[24px] flex items-center justify-between shadow-sm hover:shadow-md transition-all active:scale-[0.98] group relative">
+                  <button 
+                    key={`${ride.id}-${ride.role}`} 
+                    onClick={() => navigate(`/ride/${ride.id}`)} 
+                    className="w-full bg-white border border-slate-100 p-4 rounded-[28px] flex items-center justify-between shadow-sm hover:shadow-md transition-all active:scale-[0.98] group relative"
+                  >
                     <div className="flex items-center gap-4 text-left">
                       <div className="relative">
                         <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${isDriver ? 'bg-slate-900' : 'bg-primary/10'}`}>
@@ -199,12 +223,12 @@ export default function ProfilePage() {
                       <div className="space-y-1">
                         <div className="flex items-center gap-2 flex-wrap">
                           <p className="text-sm font-black text-slate-800 uppercase italic tracking-tighter">{ride.destination}</p>
-                          <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase ${isDriver ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600'}`}>
-                            {isDriver ? 'Driver' : 'Passenger'}
+                          <span className={`text-[7px] px-1.5 py-0.5 rounded-md font-black uppercase tracking-tighter ${isDriver ? 'bg-slate-100 text-slate-600' : 'bg-blue-50 text-blue-600'}`}>
+                            {isDriver ? 'Condutor' : 'Passageiro'}
                           </span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <div className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border ${statusInfo.color}`}>
+                          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase border transition-all ${statusInfo.color}`}>
                             {statusInfo.icon} {statusInfo.label}
                           </div>
                           <p className="text-[10px] text-slate-400 font-bold tracking-tight">{new Date(ride.ride_date).toLocaleDateString()}</p>
@@ -217,13 +241,16 @@ export default function ProfilePage() {
               })
             ) : (
               <div className="bg-white/50 p-10 rounded-[32px] border border-dashed border-slate-200 text-center">
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">Ainda sem viagens no histórico</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest italic">Ainda sem viagens no radar</p>
               </div>
             )}
           </div>
         </div>
         
-        <Button onClick={handleLogout} className="w-full h-14 bg-white hover:bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[10px] gap-2 tracking-[0.2em] transition-all border border-slate-200 hover:border-red-100 shadow-none">
+        <Button 
+          onClick={handleLogout} 
+          className="w-full h-14 bg-white hover:bg-red-50 text-red-500 rounded-2xl font-black uppercase text-[10px] gap-2 tracking-[0.2em] transition-all border border-slate-200 hover:border-red-100 shadow-none italic"
+        >
           <LogOut className="w-3 h-3" /> Terminar Sessão
         </Button>
       </div>

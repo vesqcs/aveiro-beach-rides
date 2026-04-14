@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, Clock, ChevronLeft, Users, Send, CheckCircle2, Star } from 'lucide-react';
+import { MapPin, Calendar, Clock, ChevronLeft, Users, Send, CheckCircle2, Star, XCircle, AlertTriangle } from 'lucide-react';
 import RideChat from '@/components/RideChat';
 import BookingItem from '@/components/BookingItem';
 import { toast } from 'sonner';
@@ -21,15 +21,14 @@ export default function RideDetailsPage() {
 
   const fetchDetails = async () => {
     if (!id || !user) return;
-    
     const { data: rideData, error } = await supabase
       .from('rides')
       .select('*, profiles:driver_id(full_name, car_model)')
       .eq('id', id)
       .single();
 
-    if (error) {
-      toast.error("Viagem não encontrada");
+    if (error || rideData.status === 'cancelled') {
+      toast.error("Viagem não encontrada ou cancelada");
       navigate('/search');
       return;
     }
@@ -41,9 +40,9 @@ export default function RideDetailsPage() {
       .eq('ride_id', id)
       .eq('passenger_id', user.id)
       .maybeSingle();
+
     setUserBooking(myBooking);
 
-    // Verificar se este passageiro já avaliou o condutor nesta viagem
     if (myBooking) {
         const { data: existingReview } = await supabase
             .from('reviews')
@@ -59,7 +58,6 @@ export default function RideDetailsPage() {
         .from('bookings')
         .select('*, profiles:passenger_id(full_name)')
         .eq('ride_id', id);
-      
       if (bookingsData) setBookings(bookingsData);
     }
     
@@ -78,11 +76,10 @@ export default function RideDetailsPage() {
     const { error } = await supabase
       .from('bookings')
       .insert([{ ride_id: ride.id, passenger_id: user.id, status: 'pending' }]);
-
     if (error) toast.error("Erro ao pedir boleia");
     else {
       toast.success("Pedido enviado! Aguarda a confirmação.");
-      fetchDetails(); 
+      fetchDetails();
     }
   };
 
@@ -91,7 +88,6 @@ export default function RideDetailsPage() {
       .from('rides')
       .update({ status: 'completed' })
       .eq('id', ride.id);
-
     if (error) toast.error("Erro ao concluir viagem");
     else {
       toast.success("Viagem concluída! Já podem avaliar.");
@@ -99,16 +95,60 @@ export default function RideDetailsPage() {
     }
   };
 
+  // --- NOVA FUNÇÃO: CANCELAR VIAGEM (CONDUTOR) ---
+  const handleCancelWholeRide = async () => {
+    const confirm = window.confirm("AVISO: Queres mesmo cancelar esta viagem? Todos os passageiros serão removidos.");
+    if (!confirm) return;
+
+    const { error } = await supabase
+      .from('rides')
+      .update({ status: 'cancelled' })
+      .eq('id', ride.id);
+
+    if (error) {
+      toast.error("Erro ao cancelar viagem");
+    } else {
+      toast.success("Viagem cancelada com sucesso.");
+      navigate('/profile');
+    }
+  };
+
+  // --- NOVA FUNÇÃO: CANCELAR MINHA RESERVA (PASSAGEIRO) ---
+  const handleCancelMyBooking = async () => {
+    if (!userBooking) return;
+    const confirm = window.confirm("Queres cancelar a tua reserva nesta viagem?");
+    if (!confirm) return;
+
+    const wasAccepted = userBooking.status === 'accepted' || userBooking.status === 'confirmed';
+
+    const { error: deleteError } = await supabase
+      .from('bookings')
+      .delete()
+      .eq('id', userBooking.id);
+
+    if (deleteError) {
+      toast.error("Erro ao cancelar reserva");
+    } else {
+      if (wasAccepted) {
+        // Devolve o lugar ao condutor se já estivesse aceite
+        await supabase
+          .from('rides')
+          .update({ seats_available: ride.seats_available + 1 })
+          .eq('id', ride.id);
+      }
+      toast.success("Reserva cancelada");
+      fetchDetails();
+    }
+  };
+
   const handleRateDriver = async (stars: number) => {
     if (!user || !ride) return;
-
     const { error } = await supabase.from('reviews').insert({
       ride_id: ride.id,
       reviewer_id: user.id,
       reviewed_id: ride.driver_id,
       rating: stars
     });
-
     if (error) {
       toast.error("Erro ao enviar avaliação");
     } else {
@@ -117,28 +157,26 @@ export default function RideDetailsPage() {
     }
   };
 
-  if (loading) return <div className="p-20 text-center font-bold animate-pulse text-slate-400 text-[10px] uppercase">A carregar detalhes...</div>;
+  if (loading) return <div className="p-20 text-center font-bold animate-pulse text-slate-400 text-[10px] uppercase tracking-[0.2em]">Sincronizando detalhes...</div>;
 
   const isDriver = ride.driver_id === user?.id;
   const isCompleted = ride.status === 'completed';
-  
-  // Lógica para "Em Curso" baseada no horário
   const rideDateTime = new Date(`${ride.ride_date}T${ride.ride_time}`);
   const now = new Date();
   const isInProgress = now >= rideDateTime && !isCompleted;
 
   return (
-    <div className="min-h-screen pt-4 pb-20 px-4 max-w-lg mx-auto space-y-6 bg-slate-50">
+    <div className="min-h-screen pt-4 pb-24 px-4 max-w-lg mx-auto space-y-6 bg-slate-50">
       <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 text-slate-400 hover:text-slate-900 transition-colors text-[10px] font-black uppercase tracking-widest">
         <ChevronLeft className="w-4 h-4" /> Voltar
       </Button>
 
       {/* Info da Viagem */}
-      <div className={`p-6 rounded-[32px] border shadow-sm space-y-4 transition-all ${isCompleted ? 'bg-white border-slate-200 opacity-80' : 'bg-white border-slate-200'}`}>
+      <div className={`p-6 rounded-[32px] border shadow-sm space-y-4 transition-all bg-white border-slate-200 ${isCompleted ? 'opacity-80' : ''}`}>
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-primary uppercase tracking-widest">Destino</span>
+              <span className="text-[10px] font-black text-primary uppercase tracking-widest italic">Destino</span>
               {isInProgress && (
                 <span className="bg-amber-100 text-amber-600 text-[8px] font-black px-2 py-0.5 rounded-full animate-pulse border border-amber-200 uppercase">
                   Em Curso
@@ -153,7 +191,9 @@ export default function RideDetailsPage() {
         </div>
         
         <div className="flex flex-col gap-3 pt-4 border-t border-slate-50 text-sm font-bold text-slate-600">
-          <div className="flex items-center gap-3 text-slate-800"><MapPin className="w-4 h-4 text-primary" /> {ride.origin}</div>
+          <div className="flex items-center gap-3 text-slate-800 font-black italic uppercase tracking-tight text-xs">
+            <MapPin className="w-4 h-4 text-primary" /> {ride.origin}
+          </div>
           <div className="flex items-center gap-6">
             <div className="flex items-center gap-2"><Calendar className="w-4 h-4 text-slate-300" /> {new Date(ride.ride_date).toLocaleDateString()}</div>
             <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-slate-300" /> {ride.ride_time}</div>
@@ -171,22 +211,36 @@ export default function RideDetailsPage() {
       {/* SEÇÃO DO CONDUTOR */}
       {isDriver && (
         <div className="space-y-4">
-          {isInProgress && (
+          {isInProgress ? (
             <Button 
               onClick={handleCompleteRide}
               className="w-full h-14 bg-green-600 hover:bg-green-700 text-white rounded-2xl font-black uppercase italic tracking-widest shadow-lg shadow-green-100 gap-2"
             >
               <CheckCircle2 className="w-5 h-5" /> Finalizar Viagem
             </Button>
+          ) : !isCompleted && (
+            <Button 
+              onClick={handleCancelWholeRide}
+              variant="ghost"
+              className="w-full h-12 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl font-black uppercase text-[10px] tracking-widest gap-2 border border-dashed border-red-100"
+            >
+              <XCircle className="w-4 h-4" /> Cancelar Viagem
+            </Button>
           )}
 
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
-            <Users className="w-4 h-4" /> Passageiros ({bookings.length})
+            <Users className="w-4 h-4" /> Gestão de Passageiros ({bookings.length})
           </h3>
           <div className="space-y-2">
-            {bookings.map((b) => (
-              <BookingItem key={b.id} booking={b} onUpdate={fetchDetails} isRideCompleted={isCompleted} />
-            ))}
+            {bookings.length > 0 ? (
+              bookings.map((b) => (
+                <BookingItem key={b.id} booking={b} onUpdate={fetchDetails} isRideCompleted={isCompleted} />
+              ))
+            ) : (
+              <div className="p-8 text-center bg-white rounded-3xl border border-dashed border-slate-200">
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Sem pedidos pendentes</p>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -195,35 +249,47 @@ export default function RideDetailsPage() {
       {!isDriver && (
         <div className="space-y-4">
           {userBooking && (
-            <div className={`p-4 rounded-[24px] border text-center font-black uppercase text-xs italic tracking-widest ${
-              userBooking.status === 'accepted' || userBooking.status === 'confirmed'
-              ? 'bg-green-50 text-green-600 border-green-100' 
-              : 'bg-yellow-50 text-yellow-600 border-yellow-100'
-            }`}>
-              {userBooking.status === 'accepted' || userBooking.status === 'confirmed' 
-                ? '✅ Estás confirmado!' 
-                : '⏳ Aguarda confirmação do condutor...'}
+            <div className="space-y-3">
+              <div className={`p-4 rounded-[24px] border text-center font-black uppercase text-xs italic tracking-widest ${
+                userBooking.status === 'accepted' || userBooking.status === 'confirmed'
+                ? 'bg-green-50 text-green-600 border-green-100 shadow-sm' 
+                : 'bg-yellow-50 text-yellow-600 border-yellow-100'
+              }`}>
+                {userBooking.status === 'accepted' || userBooking.status === 'confirmed' 
+                  ? '✅ Estás confirmado!' 
+                  : '⏳ Aguarda confirmação do condutor...'}
+              </div>
+              
+              {!isCompleted && !isInProgress && (
+                <Button 
+                  onClick={handleCancelMyBooking}
+                  variant="ghost"
+                  className="w-full h-10 text-slate-400 hover:text-red-500 text-[9px] font-black uppercase tracking-[0.2em]"
+                >
+                  <AlertTriangle className="w-3 h-3 mr-1" /> Cancelar minha reserva
+                </Button>
+              )}
             </div>
           )}
 
-          {/* ÁREA DE AVALIAÇÃO DO CONDUTOR (Só aparece se a viagem acabou e o passageiro foi aceite) */}
+          {/* ÁREA DE AVALIAÇÃO DO CONDUTOR */}
           {isCompleted && (userBooking?.status === 'accepted' || userBooking?.status === 'confirmed') && (
             <div className="bg-white border-2 border-primary/10 p-6 rounded-[32px] shadow-sm text-center space-y-4 animate-in fade-in slide-in-from-bottom-4">
               <div className="space-y-1">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">A viagem terminou!</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Viagem Terminada</p>
                 <p className="text-sm font-black text-slate-800 uppercase italic">Como foi o condutor {ride.profiles?.full_name}?</p>
               </div>
               
               {hasRated ? (
-                <div className="flex flex-col items-center gap-1 text-green-500">
+                <div className="flex flex-col items-center gap-1 text-green-500 bg-green-50 py-3 rounded-2xl border border-green-100">
                     <CheckCircle2 className="w-6 h-6" />
-                    <p className="text-[10px] font-black uppercase italic">Avaliação enviada com sucesso!</p>
+                    <p className="text-[10px] font-black uppercase italic">Obrigado pela tua avaliação!</p>
                 </div>
               ) : (
                 <div className="flex justify-center gap-2">
                   {[1, 2, 3, 4, 5].map((star) => (
-                    <button key={star} onClick={() => handleRateDriver(star)} className="p-1.5 hover:scale-125 transition-all">
-                      <Star className="w-7 h-7 text-slate-200 hover:text-yellow-400 hover:fill-yellow-400" />
+                    <button key={star} onClick={() => handleRateDriver(star)} className="p-1.5 hover:scale-125 transition-all group">
+                      <Star className="w-7 h-7 text-slate-200 group-hover:text-yellow-400 group-hover:fill-yellow-400" />
                     </button>
                   ))}
                 </div>
@@ -231,11 +297,11 @@ export default function RideDetailsPage() {
             </div>
           )}
 
-          {!userBooking && !isCompleted && (
+          {!userBooking && !isCompleted && !isInProgress && (
             <Button 
               onClick={handleRequestRide}
               disabled={ride.seats_available <= 0}
-              className="w-full h-16 bg-primary text-white rounded-[24px] font-black uppercase italic tracking-widest shadow-xl shadow-primary/20 gap-3"
+              className="w-full h-16 bg-primary text-white rounded-[24px] font-black uppercase italic tracking-widest shadow-xl shadow-primary/20 gap-3 active:scale-95 transition-all"
             >
               <Send className="w-5 h-5" /> {ride.seats_available > 0 ? 'Reservar Lugar' : 'Esgotado'}
             </Button>
@@ -243,10 +309,12 @@ export default function RideDetailsPage() {
         </div>
       )}
 
-      {/* CHAT - Disponível se a viagem não acabou ou for membro confirmado */}
+      {/* CHAT - Disponível para condutor ou membros confirmados se não acabou */}
       {(isDriver || userBooking?.status === 'accepted' || userBooking?.status === 'confirmed') && !isCompleted && (
-        <div className="space-y-3">
-          <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chat da Viagem</div>
+        <div className="space-y-3 pt-4">
+          <div className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> Chat da Viagem
+          </div>
           <RideChat rideId={ride.id} />
         </div>
       )}

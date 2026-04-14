@@ -25,9 +25,10 @@ export default function SearchPage() {
   const fetchRides = async () => {
     setLoading(true);
     try {
-      const today = new Date().toISOString().split('T')[0];
+      const now = new Date();
+      const today = now.toISOString().split('T')[0];
+      const currentTime = now.toTimeString().split(' ')[0]; // HH:MM:SS
 
-      // CORREÇÃO: Pedimos explicitamente seats_available e price
       let query = supabase
         .from('rides')
         .select(`
@@ -42,14 +43,17 @@ export default function SearchPage() {
           status,
           profiles:driver_id (
             full_name,
-            rating
+            avatar_url
           )
         `)
         .eq('status', 'active')
-        .gt('seats_available', 0) // Filtra pelo novo nome da coluna
-        .gte('ride_date', today)
-        .order('ride_date', { ascending: true })
-        .order('ride_time', { ascending: true });
+        .gt('seats_available', 0);
+
+      // LÓGICA DE FILTRO DE TEMPO:
+      // 1. A data tem de ser maior que hoje
+      // OU
+      // 2. A data é hoje E a hora é maior que a atual
+      query = query.or(`ride_date.gt.${today},and(ride_date.eq.${today},ride_time.gt.${currentTime})`);
 
       if (origin.trim()) {
         query = query.ilike('origin', `%${origin.trim()}%`);
@@ -63,7 +67,8 @@ export default function SearchPage() {
         query = query.eq('ride_date', dateFilter);
       }
 
-      const { data, error } = await query;
+      const { data, error } = await query.order('ride_date', { ascending: true }).order('ride_time', { ascending: true });
+      
       if (error) throw error;
       setRides(data || []);
     } catch (error: any) {
@@ -109,14 +114,14 @@ export default function SearchPage() {
 
   return (
     <div className="min-h-screen pb-24 pt-4 px-4 max-w-lg mx-auto space-y-6 text-slate-800">
-      <h1 className="text-2xl font-black flex items-center gap-2 text-slate-900 tracking-tighter uppercase">
+      <h1 className="text-2xl font-black flex items-center gap-2 text-slate-900 tracking-tighter uppercase italic">
         <SearchIcon className="w-6 h-6 text-primary" /> Procurar BOLEIA
       </h1>
 
-      <div className="p-5 bg-white rounded-3xl border border-slate-100 shadow-xl shadow-slate-200/50 space-y-5">
+      <div className="p-5 bg-white rounded-[32px] border border-slate-100 shadow-xl shadow-slate-200/40 space-y-5">
         <div className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-widest">Origem</Label>
+            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-[0.2em]">Origem</Label>
             <LocationInput 
               placeholder="Sair de..." 
               value={origin} 
@@ -125,7 +130,7 @@ export default function SearchPage() {
           </div>
 
           <div className="space-y-1">
-            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-widest">Destino</Label>
+            <Label className="text-[10px] uppercase font-black text-slate-400 ml-1 tracking-[0.2em]">Destino</Label>
             <LocationInput 
               placeholder="Ir para..." 
               value={destination} 
@@ -139,21 +144,21 @@ export default function SearchPage() {
               <Calendar className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
               <Input 
                 type="date" 
-                className="pl-9 h-12 bg-slate-50 border-none rounded-xl font-medium"
+                className="pl-9 h-12 bg-slate-50 border-none rounded-2xl font-bold"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
                 min={new Date().toISOString().split('T')[0]}
               />
             </div>
             {(origin || destination || dateFilter) && (
-              <Button variant="ghost" size="icon" className="h-12 w-12 shrink-0 bg-slate-100 rounded-xl" onClick={clearFilters}>
+              <Button variant="ghost" size="icon" className="h-12 w-12 shrink-0 bg-slate-100 rounded-2xl" onClick={clearFilters}>
                 <X className="w-4 h-4" />
               </Button>
             )}
           </div>
         </div>
 
-        <Button onClick={fetchRides} className="w-full h-12 font-black uppercase tracking-widest shadow-lg shadow-primary/20 rounded-xl transition-all active:scale-95">
+        <Button onClick={fetchRides} className="w-full h-14 font-black uppercase tracking-widest shadow-xl shadow-primary/20 rounded-[20px] transition-all active:scale-95 italic">
           Filtrar Resultados
         </Button>
       </div>
@@ -161,21 +166,21 @@ export default function SearchPage() {
       {loading ? (
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-40 rounded-3xl bg-slate-100 animate-pulse" />
+            <div key={i} className="h-40 rounded-[32px] bg-slate-100 animate-pulse" />
           ))}
         </div>
       ) : rides.length === 0 ? (
-        <div className="text-center py-16 bg-white rounded-3xl border border-dashed border-slate-200">
+        <div className="text-center py-16 bg-white rounded-[32px] border border-dashed border-slate-200">
           <Filter className="w-12 h-12 mx-auto mb-4 text-slate-200" />
-          <p className="font-bold text-slate-800">Sem boleias encontradas</p>
-          <p className="text-sm text-slate-400 px-10 mt-2">
-            Tenta mudar os filtros ou publica uma nova viagem!
+          <p className="font-black text-slate-800 uppercase italic">Nenhuma boleia disponível</p>
+          <p className="text-xs text-slate-400 px-10 mt-2 font-medium">
+            Tenta mudar os filtros ou volta mais tarde. Viagens "Em curso" já não aparecem aqui!
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1">
-            {rides.length} {rides.length === 1 ? 'Boleia encontrada' : 'Boleias encontradas'}
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] px-1 italic">
+            {rides.length} {rides.length === 1 ? 'Boleia aberta' : 'Boleias abertas'}
           </p>
           {rides.map((ride) => (
             <RideCard 
