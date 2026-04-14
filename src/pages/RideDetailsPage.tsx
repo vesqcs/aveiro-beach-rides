@@ -27,7 +27,7 @@ export default function RideDetailsPage() {
       .eq('id', id)
       .single();
 
-    if (error || rideData.status === 'cancelled') {
+    if (error || !rideData || rideData.status === 'cancelled') {
       toast.error("Viagem não encontrada ou cancelada");
       navigate('/search');
       return;
@@ -65,10 +65,37 @@ export default function RideDetailsPage() {
   };
 
   useEffect(() => {
-    if (id) {
-      localStorage.setItem(`last_visit_${id}`, new Date().toISOString());
-    }
+    if (!id || !user) return;
+    
+    localStorage.setItem(`last_visit_${id}`, new Date().toISOString());
     fetchDetails();
+
+    // REAL-TIME: Garante que se o condutor cancelar, o passageiro sai da página na hora
+    const channel = supabase.channel(`ride_realtime_${id}`)
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'rides', 
+        filter: `id=eq.${id}` 
+      }, (payload: any) => {
+        if (payload.new && payload.new.status === 'cancelled') {
+          toast.error("O condutor cancelou esta viagem.");
+          navigate('/profile');
+        } else {
+          fetchDetails();
+        }
+      })
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'bookings', 
+        filter: `ride_id=eq.${id}` 
+      }, () => {
+        fetchDetails();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [id, user]);
 
   const handleRequestRide = async () => {
@@ -95,7 +122,6 @@ export default function RideDetailsPage() {
     }
   };
 
-  // --- NOVA FUNÇÃO: CANCELAR VIAGEM (CONDUTOR) ---
   const handleCancelWholeRide = async () => {
     const confirm = window.confirm("AVISO: Queres mesmo cancelar esta viagem? Todos os passageiros serão removidos.");
     if (!confirm) return;
@@ -113,7 +139,6 @@ export default function RideDetailsPage() {
     }
   };
 
-  // --- NOVA FUNÇÃO: CANCELAR MINHA RESERVA (PASSAGEIRO) ---
   const handleCancelMyBooking = async () => {
     if (!userBooking) return;
     const confirm = window.confirm("Queres cancelar a tua reserva nesta viagem?");
@@ -130,13 +155,13 @@ export default function RideDetailsPage() {
       toast.error("Erro ao cancelar reserva");
     } else {
       if (wasAccepted) {
-        // Devolve o lugar ao condutor se já estivesse aceite
         await supabase
           .from('rides')
           .update({ seats_available: ride.seats_available + 1 })
           .eq('id', ride.id);
       }
       toast.success("Reserva cancelada");
+      setUserBooking(null);
       fetchDetails();
     }
   };
@@ -219,13 +244,16 @@ export default function RideDetailsPage() {
               <CheckCircle2 className="w-5 h-5" /> Finalizar Viagem
             </Button>
           ) : !isCompleted && (
-            <Button 
-              onClick={handleCancelWholeRide}
-              variant="ghost"
-              className="w-full h-12 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl font-black uppercase text-[10px] tracking-widest gap-2 border border-dashed border-red-100"
-            >
-              <XCircle className="w-4 h-4" /> Cancelar Viagem
-            </Button>
+            <div className="p-4 bg-white rounded-3xl border border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest text-center mb-3">Opções da Viagem</p>
+                <Button 
+                    onClick={handleCancelWholeRide}
+                    variant="ghost"
+                    className="w-full h-12 text-red-500 hover:bg-red-50 hover:text-red-600 rounded-2xl font-black uppercase text-[10px] tracking-widest gap-2 border border-dashed border-red-100"
+                >
+                    <XCircle className="w-4 h-4" /> Cancelar Viagem Total
+                </Button>
+            </div>
           )}
 
           <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 px-1">
